@@ -204,7 +204,7 @@ function winStatus() {
   const el = wq("[data-w=status]");
   if (!el) return;
   const c = S.cursorInfo;
-  el.innerHTML = `<span>${c ? esc(c.coord) : "–"}</span>${c?.value ? `<span>${esc(c.value)}</span>` : ""}${c?.cls ? `<span>class ${esc(c.cls)}</span>` : ""}<span>${S.stack ? `${nf(S.stack.grid.width)} × ${nf(S.stack.grid.height)} · EPSG:${S.stack.grid.epsg}` : ""}</span><span class="icw-sp"></span><span data-w="prog">${S.busy ? "Working…" : "Ready"}</span><span>Linked to GeoLibre</span>`;
+  el.innerHTML = `<span>${c ? esc(c.coord) : "–"}</span>${c?.value ? `<span>${esc(c.value)}</span>` : ""}${c?.cls ? `<span>class ${esc(c.cls)}</span>` : ""}<span>${S.stack ? `${nf(S.stack.grid.width)} × ${nf(S.stack.grid.height)} · EPSG:${S.stack.grid.epsg}` : ""}</span><span class="icw-sp"></span><span data-w="prog">${S.busy ? "Working…" : S.lastRun ? `Ready · last run ${fmtDur(S.lastRun)}` : "Ready"}</span><span>Linked to GeoLibre</span>`;
 }
 
 function viewNote() {
@@ -781,7 +781,7 @@ async function runClustering() {
     S.clusters = { algo: p.ualgo, cls, grid: g, names, iterations: res.iterations, changed: res.changed, map, ndviIdx, ndviName: names[ndviIdx] ?? "", info: centersRaw.map((c, i) => ({ share: (cnt[i] / tot) * 100, ndvi: ndviIdx >= 0 ? c[ndviIdx] : 0 })) };
     const classes = S.clusters.info.map((_, i) => ({ code: i + 1, name: "Cluster " + (i + 1), color: CLUSTER_COLORS[i % CLUSTER_COLORS.length] }));
     pushResult({ kind: "clusters", algo: p.ualgo, names, model: { importance: null }, accTest: null, grid: g, cls, areas: classAreas(cls, g, K), codes: classes.map((c) => c.code), classes, seconds: (performance.now() - t0) / 1000, name: `${p.ualgo === "ISO" ? "ISODATA" : "K-means"} (${K} clusters)` });
-    wlog(`${p.ualgo === "ISO" ? "ISODATA" : "K-means"}: ${K} clusters from ${nf(pick.length)} pixels, ${res.iterations} iterations, ${nf((performance.now() - t0) / 1000, 1)} s`);
+    wlog(`${p.ualgo === "ISO" ? "ISODATA" : "K-means"}: ${K} clusters from ${nf(pick.length)} pixels, ${res.iterations} iterations, ${fmtDur((performance.now() - t0) / 1000)}`);
   } catch (e) {
     console.warn("[Image Classification] clustering", e);
     S.msg = e?.message ?? String(e);
@@ -804,6 +804,7 @@ function applyClusters() {
 
 function pushResult(r) {
   r.version = (r.version ?? 0) + 1;
+  if (r.seconds) S.lastRun = r.seconds;
   S.results.push(r);
   S.result = r;
   S.split.right = "res:" + (S.results.length - 1);
@@ -816,6 +817,7 @@ async function applyToSet(key) {
   const prev = S.set;
   S.applying = true;
   S.busy = true; render();
+  const t0 = performance.now();
   try {
     S.set = key;
     const st = await ensureStack(), fc = featureLayers(st), byRole = {};
@@ -831,8 +833,8 @@ async function applyToSet(key) {
       progress("Classifying " + setNameOf(key), start / n); await tick();
     }
     const maxCode = Math.max(...r.codes);
-    pushResult({ ...r, kind: "applied", accTest: null, patches: null, grid: g, cls, areas: classAreas(cls, g, maxCode), name: `Land Cover (${setNameOf(key)})`, version: 0 });
-    wlog(`Applied the model to ${setNameOf(key)}.`);
+    pushResult({ ...r, kind: "applied", accTest: null, patches: null, seconds: (performance.now() - t0) / 1000, grid: g, cls, areas: classAreas(cls, g, maxCode), name: `Land Cover (${setNameOf(key)})`, version: 0 });
+    wlog(`Applied the model to ${setNameOf(key)} in ${fmtDur((performance.now() - t0) / 1000)}.`);
     S.imgCache.set("img:" + key, { canvas: compositeCanvas(st), grid: g });
   } catch (e) { console.warn("[image-classification] apply to", key, e); say(e?.message ?? String(e)); }
   finally { S.set = prev; S.applying = false; S.busy = false; progress(null); render(); }
@@ -863,7 +865,7 @@ function resultsDock() {
   <section class="icl-sec">
     <div class="icl-mid"><h3 class="icl-head">${esc(r.name)}</h3></div>
     ${a ? `<div class="icl-tiles"><div class="icl-tile"><span class="icl-lab">Overall accuracy</span><b>${pct(a.oa)}%</b></div><div class="icl-tile"><span class="icl-lab">Kappa</span><b>${a.kappa.toFixed(3)}</b></div></div>` : ""}
-    <span class="icl-lab">${r.kind === "clusters" ? "Clusters: label them on the Model step." : `${ALGO_NAMES[r.algo] ?? r.algo}${r.sp ? ` · ${nf(r.sp.train.cells.length)} training and ${nf(r.sp.test.cells.length)} test pixels` : ""} · ${nf(r.seconds, 1)} s`}</span>
+    <span class="icl-lab">${r.kind === "clusters" ? "Clusters: label them on the Model step." : `${ALGO_NAMES[r.algo] ?? r.algo}${r.sp ? ` · ${nf(r.sp.train.cells.length)} training and ${nf(r.sp.test.cells.length)} test pixels` : ""} ${r.seconds ? ` · ${fmtDur(r.seconds)}` : ""}`}</span>
     <div class="icl-mid"><button type="button" class="icl-btn2 grow" data-do="v:charts">Charts</button><button type="button" class="icl-btn2 grow" data-do="v:acc"${a ? "" : " disabled"}>Accuracy</button><button type="button" class="icl-btn2 grow" data-do="v:split">Before / after</button></div>
   </section>
   <section class="icl-sec">

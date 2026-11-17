@@ -314,24 +314,24 @@ Majority filter: each pixel takes the most frequent class in its 3 × 3 or 5 × 
 
 ## Spectral indices
 
-Formulas use reflectance (0–1) with Sentinel-2 band names; other sensors are mapped through band roles.
+$\rho$ is surface reflectance (0–1) in the band named: Blue, Green, Red, RE1–RE3 (red edge), NIR, $\mathrm{NIR}_{n}$ (narrow NIR), SWIR1, SWIR2. The Sentinel-2 bands are listed; other sensors are mapped to the same roles (see [Supported sensors](#supported-sensors)).
 
-| Index | Formula | Source |
-|---|---|---|
-| NDVI | $(B8-B4)/(B8+B4)$ | Rouse et al. (1974) |
-| EVI2 | $2.5\,(B8-B4)/(B8+2.4\,B4+1)$ | Jiang et al. (2008) |
-| SAVI | $1.5\,(B8-B4)/(B8+B4+0.5)$ | Huete (1988) |
-| GCVI | $B8/B3 - 1$ | Gitelson et al. (2003) |
-| NDWI | $(B3-B8)/(B3+B8)$ | McFeeters (1996) |
-| NDMI | $(B8-B11)/(B8+B11)$ | Gao (1996) |
-| MNDWI | $(B3-B11)/(B3+B11)$ | Xu (2006) |
-| NDBI | $(B11-B8)/(B11+B8)$ | Zha et al. (2003) |
-| NBR | $(B8-B12)/(B8+B12)$ | Key & Benson (2006) |
-| NDRE | $(B8A-B5)/(B8A+B5)$ | Barnes et al. (2000) |
-| MVI | $(B8-B3)/(B11-B3)$ | Baloloy et al. (2020) |
-| ATBI | $\dfrac{B8-B12}{B8+B12}\cdot\dfrac{B12}{B8}$ | Bilal (2025) |
-| AMMI | $\dfrac{B8-B4}{B4+B11}\cdot\dfrac{B8-B11}{B11-0.65\,B4}$ | Suyarso & Avianto (2022) |
-| IRECI | $(B7-B4)/(B5/B6)$ | Frampton et al. (2013) |
+| Index | Formula | Sentinel-2 bands | Source |
+|---|---|---|---|
+| NDVI | $\dfrac{\rho_{\mathrm{NIR}} - \rho_{\mathrm{Red}}}{\rho_{\mathrm{NIR}} + \rho_{\mathrm{Red}}}$ | B8, B4 | Rouse et al. (1974) |
+| EVI2 | $2.5\,\dfrac{\rho_{\mathrm{NIR}} - \rho_{\mathrm{Red}}}{\rho_{\mathrm{NIR}} + 2.4\,\rho_{\mathrm{Red}} + 1}$ | B8, B4 | Jiang et al. (2008) |
+| SAVI | $\dfrac{(1 + L)\,(\rho_{\mathrm{NIR}} - \rho_{\mathrm{Red}})}{\rho_{\mathrm{NIR}} + \rho_{\mathrm{Red}} + L},\quad L = 0.5$ | B8, B4 | Huete (1988) |
+| GCVI | $\dfrac{\rho_{\mathrm{NIR}}}{\rho_{\mathrm{Green}}} - 1$ | B8, B3 | Gitelson et al. (2003) |
+| NDWI | $\dfrac{\rho_{\mathrm{Green}} - \rho_{\mathrm{NIR}}}{\rho_{\mathrm{Green}} + \rho_{\mathrm{NIR}}}$ | B3, B8 | McFeeters (1996) |
+| NDMI | $\dfrac{\rho_{\mathrm{NIR}} - \rho_{\mathrm{SWIR1}}}{\rho_{\mathrm{NIR}} + \rho_{\mathrm{SWIR1}}}$ | B8, B11 | Gao (1996) |
+| MNDWI | $\dfrac{\rho_{\mathrm{Green}} - \rho_{\mathrm{SWIR1}}}{\rho_{\mathrm{Green}} + \rho_{\mathrm{SWIR1}}}$ | B3, B11 | Xu (2006) |
+| NDBI | $\dfrac{\rho_{\mathrm{SWIR1}} - \rho_{\mathrm{NIR}}}{\rho_{\mathrm{SWIR1}} + \rho_{\mathrm{NIR}}}$ | B11, B8 | Zha et al. (2003) |
+| NBR | $\dfrac{\rho_{\mathrm{NIR}} - \rho_{\mathrm{SWIR2}}}{\rho_{\mathrm{NIR}} + \rho_{\mathrm{SWIR2}}}$ | B8, B12 | Key & Benson (2006) |
+| NDRE | $\dfrac{\rho_{\mathrm{NIR}_{n}} - \rho_{\mathrm{RE1}}}{\rho_{\mathrm{NIR}_{n}} + \rho_{\mathrm{RE1}}}$ | B8A, B5 | Barnes et al. (2000) |
+| MVI | $\dfrac{\rho_{\mathrm{NIR}} - \rho_{\mathrm{Green}}}{\rho_{\mathrm{SWIR1}} - \rho_{\mathrm{Green}}}$ | B8, B3, B11 | Baloloy et al. (2020) |
+| IRECI | $\dfrac{\rho_{\mathrm{RE3}} - \rho_{\mathrm{Red}}}{\rho_{\mathrm{RE1}} / \rho_{\mathrm{RE2}}}$ | B7, B4, B5, B6 | Frampton et al. (2013) |
+| ATBI | $\dfrac{\rho_{\mathrm{NIR}} - \rho_{\mathrm{SWIR2}}}{\rho_{\mathrm{NIR}} + \rho_{\mathrm{SWIR2}}}\cdot\dfrac{\rho_{\mathrm{SWIR2}}}{\rho_{\mathrm{NIR}}}$ | B8, B12 | Bilal (2025) |
+| AMMI | $\dfrac{\rho_{\mathrm{NIR}} - \rho_{\mathrm{Red}}}{\rho_{\mathrm{Red}} + \rho_{\mathrm{SWIR1}}}\cdot\dfrac{\rho_{\mathrm{NIR}} - \rho_{\mathrm{SWIR1}}}{\rho_{\mathrm{SWIR1}} - 0.65\,\rho_{\mathrm{Red}}}$ | B8, B4, B11 | Suyarso & Avianto (2022) |
 
 Your own expressions may use `B2 … B12`, `B8A`, numbers, `+ - * /` and parentheses, for example `(B8 - B4) / (B8 + B4 + 0.5) * 1.5`.
 

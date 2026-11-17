@@ -1,7 +1,7 @@
 // Image Classification: GeoLibre plugin UI. Core (indices, classifiers, accuracy, GeoTIFF writer) is prepended by build.mjs.
 const ID = "image-classification";
 const PANEL = ID + "-panel";
-const VERSION = "0.4.7";
+const VERSION = "0.4.8";
 const SRC = "icl-samples", DRAFT = "icl-draft";
 const ICON =
   "data:image/svg+xml;utf8," +
@@ -1096,14 +1096,41 @@ async function exportSvg(svg, base, fmt) {
 
 // ================================================================ run
 
+/** 8.4 s · 1 min 20 s · 1 h 02 min 05 s */
+function fmtDur(sec) {
+  if (!Number.isFinite(sec) || sec < 0) return "–";
+  if (sec < 60) return `${nf(sec, sec < 10 ? 1 : 0)} s`;
+  const t = Math.round(sec), h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), s = t % 60;
+  return h ? `${h} h ${String(m).padStart(2, "0")} min ${String(s).padStart(2, "0")} s` : `${m} min ${String(s).padStart(2, "0")} s`;
+}
 function progress(label, frac) {
+  if (label == null) {
+    clearInterval(S.runTick); S.runTick = null; S.run = null;
+    const bar = $("[data-o=prog]"); if (bar) bar.hidden = true;
+    if (S.win) winStatus();
+    return;
+  }
+  // the clock starts at the first progress call of a job and stops at progress(null)
+  if (!S.run) { S.run = { t0: performance.now() }; S.runTick = setInterval(showProgress, 1000); }
+  S.run.label = label; S.run.frac = frac;
+  showProgress();
+}
+function runTimes() {
+  const r = S.run; if (!r) return null;
+  const el = (performance.now() - r.t0) / 1000, left = r.frac > 0.03 && r.frac < 1 && el > 3 ? (el * (1 - r.frac)) / r.frac : null;
+  return { el, left };
+}
+function showProgress() {
+  const r = S.run, t = runTimes(); if (!r || !t) return;
   const bar = $("[data-o=prog]");
-  if (!bar) return;
-  if (label == null) { bar.hidden = true; return; }
-  bar.hidden = false;
-  bar.querySelector("span").textContent = label;
-  bar.querySelector("b").textContent = Math.round(frac * 100) + "%";
-  bar.querySelector("i").style.width = Math.round(frac * 100) + "%";
+  if (bar) {
+    bar.hidden = false;
+    bar.querySelector("span").textContent = `${r.label} · ${fmtDur(t.el)}${t.left != null ? ` · ~${fmtDur(t.left)} left` : ""}`;
+    bar.querySelector("b").textContent = Math.round(r.frac * 100) + "%";
+    bar.querySelector("i").style.width = Math.round(r.frac * 100) + "%";
+  }
+  const st = S.win?.querySelector("[data-w=prog]");
+  if (st) st.textContent = `${r.label} · ${Math.round(r.frac * 100)}% · ${fmtDur(t.el)}${t.left != null ? ` · ~${fmtDur(t.left)} left` : ""}`;
 }
 
 async function runClassification() {
@@ -1155,7 +1182,7 @@ async function runClassification() {
     const areas = classAreas(final, grid, Math.max(maxCode, ...sp.codes));
     const featRoles = [...st.bands.map((b) => ({ role: b.role })), ...indexDefs().map((x) => ({ index: x.name }))];
     pushResult({ kind: "classified", algo: p.algo, opts, names, featRoles, model, sp, accTest, accTrain, grid, cls: final, areas, codes: sp.codes, classes: S.classes.map((c) => ({ ...c })), splitBy: p.splitBy, seconds: (performance.now() - t0) / 1000, smooth: p.smooth, name: (p.outName.trim() || "Land Cover") + (S.win && imageSets().length > 1 ? ` (${activeSetName()})` : "") });
-    wlog(`${ALGO_NAMES[p.algo]} on ${activeSetName()}: ${d} inputs, ${nf(sp.train.cells.length)} training / ${nf(sp.test.cells.length)} test pixels, ${accTest ? `OA ${pct(accTest.oa)}%, kappa ${accTest.kappa.toFixed(3)}` : "no test pixels"}, ${nf((performance.now() - t0) / 1000, 1)} s`);
+    wlog(`${ALGO_NAMES[p.algo]} on ${activeSetName()}: ${d} inputs, ${nf(sp.train.cells.length)} training / ${nf(sp.test.cells.length)} test pixels, ${accTest ? `OA ${pct(accTest.oa)}%, kappa ${accTest.kappa.toFixed(3)}` : "no test pixels"}, ${fmtDur((performance.now() - t0) / 1000)}`);
     if (!S.win) await addResultLayer();
     S.tab = "results";
   } catch (e) {
@@ -1781,7 +1808,7 @@ function tabResults() {
   <section class="icl-sec">
     <div class="icl-mid"><h3 class="icl-head">Accuracy</h3><span class="icl-lab">${ALGO_NAMES[r.algo]} · ${params} · ${r.names.length} inputs</span></div>
     <div class="icl-tiles">${tiles.map(([k, v]) => `<div class="icl-tile"><span class="icl-lab">${k}</span><b>${v}</b></div>`).join("")}</div>
-    <span class="icl-lab">${nf(r.sp.train.cells.length)} training · ${nf(r.sp.test.cells.length)} test pixels · ${nf(r.seconds, 1)} s${r.sp.capped ? ` · ${r.sp.capped} samples capped at ${P().maxPix} px` : ""}</span>
+    <span class="icl-lab">${nf(r.sp.train.cells.length)} training · ${nf(r.sp.test.cells.length)} test pixels · ${fmtDur(r.seconds)}${r.sp.capped ? ` · ${r.sp.capped} samples capped at ${P().maxPix} px` : ""}</span>
   </section>
   <section class="icl-sec">${matrix}</section>
   <section class="icl-sec">${card("areas")}</section>
