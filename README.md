@@ -257,7 +257,7 @@ Di sini indeks $i$ = kelas peta dan $j$ = kelas referensi. Karena piksel uji ber
 Pada grid geografis (EPSG:4326) luas sel dihitung per baris lintang:
 
 ```math
-A_{\text{sel}} = R^{2}\,\Delta\lambda\,\lvert \sin\varphi_{1} - \sin\varphi_{2} \rvert, \qquad R = 6\,371\,\text{008,8}\ \text{m}
+A_{\text{sel}} = R^{2}\,\Delta\lambda\,\lvert \sin\varphi_{1} - \sin\varphi_{2} \rvert, \qquad R = \text{6 371 008,8 m}
 ```
 
 Pada grid terproyeksi $A_{\text{sel}} = \lvert\Delta x\,\Delta y\rvert$.
