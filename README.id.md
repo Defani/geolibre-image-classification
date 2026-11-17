@@ -170,44 +170,44 @@ Pada data contoh, sekitar 1.295 ha hutan sebelum kebakaran menjadi area terbakar
 
 ### Notasi
 
-$n$ jumlah piksel latih, $d$ jumlah input (band + indeks), $K$ jumlah kelas, $n_k$ jumlah piksel kelas $k$.
+$`n`$ jumlah piksel latih, $`d`$ jumlah input (band + indeks), $`K`$ jumlah kelas, $`n_k`$ jumlah piksel kelas $`k`$.
 
 ### Random Forest
 
-Setiap pohon dilatih pada sampel bootstrap berukuran $\text{bag} \cdot n$. Pada tiap node dipilih acak $m = \mathrm{round}(\sqrt{d})$ variabel, dan split dipilih yang paling menurunkan ketidakmurnian Gini:
+Setiap pohon dilatih pada sampel bootstrap berukuran $`\text{bag} \cdot n`$. Pada tiap node dipilih acak $`m = \mathrm{round}(\sqrt{d})`$ variabel, dan split dipilih yang paling menurunkan ketidakmurnian Gini:
 
 ```math
 G(t) = 1 - \sum_{k=1}^{K} p_{k}(t)^{2}, \qquad \Delta G = n_t\,G(t) - n_{L}\,G(L) - n_{R}\,G(R)
 ```
 
-Prediksi adalah suara terbanyak semua pohon. Pentingnya variabel $j$ adalah jumlah $\Delta G$ pada split yang memakai $j$, dinormalkan sehingga totalnya 1. Akurasi *out-of-bag* dihitung dari pohon yang tidak memakai piksel itu dalam bootstrap-nya (Breiman, 2001).
+Prediksi adalah suara terbanyak semua pohon. Pentingnya variabel $`j`$ adalah jumlah $`\Delta G`$ pada split yang memakai $`j`$, dinormalkan sehingga totalnya 1. Akurasi *out-of-bag* dihitung dari pohon yang tidak memakai piksel itu dalam bootstrap-nya (Breiman, 2001).
 
 ### Gradient Tree Boost
 
-Model aditif per kelas $F_k(x)$ dengan softmax dan multinomial deviance (Friedman, 2001):
+Model aditif per kelas $`F_k(x)`$ dengan softmax dan multinomial deviance (Friedman, 2001):
 
 ```math
 p_k(x) = \frac{e^{F_k(x)}}{\sum_{j} e^{F_j(x)}}, \qquad L = -\sum_{i=1}^{n}\sum_{k=1}^{K} y_{ik}\,\ln p_k(x_i)
 ```
 
-Setiap ronde, untuk setiap kelas sebuah pohon kecil dipasang pada gradien $g_{ik} = y_{ik} - p_k(x_i)$ dengan hessian $h_{ik} = p_k(x_i)\,(1-p_k(x_i))$, lalu $F_k \leftarrow F_k + \nu\, f_k$ dengan shrinkage $\nu$ (default 0,05) dan subsampel baris (default 0,7).
+Setiap ronde, untuk setiap kelas sebuah pohon kecil dipasang pada gradien $`g_{ik} = y_{ik} - p_k(x_i)`$ dengan hessian $`h_{ik} = p_k(x_i)\,(1-p_k(x_i))`$, lalu $`F_k \leftarrow F_k + \nu\, f_k`$ dengan shrinkage $`\nu`$ (default 0,05) dan subsampel baris (default 0,7).
 
 ### Support Vector Machine
 
-C-SVC (Cortes & Vapnik, 1995), satu lawan satu untuk multikelas, diselesaikan dengan SMO *maximal violating pair* (Keerthi dkk., 2001). Input distandardisasi $z = (x-\mu)/\sigma$. Bentuk dual:
+C-SVC (Cortes & Vapnik, 1995), satu lawan satu untuk multikelas, diselesaikan dengan SMO *maximal violating pair* (Keerthi dkk., 2001). Input distandardisasi $`z = (x-\mu)/\sigma`$. Bentuk dual:
 
 ```math
 \max_{\alpha}\; \sum_i \alpha_i - \tfrac12 \sum_{i,j} \alpha_i \alpha_j y_i y_j K(x_i, x_j) \quad \text{s.t. } 0 \le \alpha_i \le C,\; \sum_i \alpha_i y_i = 0
 ```
 
-| Kernel | $K(x, x')$ |
+| Kernel | $`K(x, x')`$ |
 |---|---|
-| RBF | $\exp(-\gamma\,\lVert x - x' \rVert^{2})$ |
-| Linear | $x^\top x'$ |
-| Polinomial | $(\gamma\, x^\top x' + c_0)^{p}$ |
-| Sigmoid | $\tanh(\gamma\, x^\top x' + c_0)$ |
+| RBF | $`\exp(-\gamma\,\lVert x - x' \rVert^{2})`$ |
+| Linear | $`x^\top x'`$ |
+| Polinomial | $`(\gamma\, x^\top x' + c_0)^{p}`$ |
+| Sigmoid | $`\tanh(\gamma\, x^\top x' + c_0)`$ |
 
-$\gamma$ yang dimasukkan dibagi $d$. Untuk menjaga ukuran matriks kernel, SVM dilatih pada paling banyak 2.000 piksel terstratifikasi.
+$`\gamma`$ yang dimasukkan dibagi $`d`$. Untuk menjaga ukuran matriks kernel, SVM dilatih pada paling banyak 2.000 piksel terstratifikasi.
 
 ### Bobot kelas seimbang
 
@@ -217,11 +217,11 @@ Dengan *Balance classes*, bobot setiap kelas sama dengan `class_weight="balanced
 w_k = \frac{n}{K\, n_k}
 ```
 
-RF memakai bootstrap dengan jumlah tarikan sama per kelas, GTB mengalikan gradien dan hessian dengan $w_k$, SVM memakai $C_k = w_k C$.
+RF memakai bootstrap dengan jumlah tarikan sama per kelas, GTB mengalikan gradien dan hessian dengan $`w_k`$, SVM memakai $`C_k = w_k C`$.
 
 ### Akurasi
 
-Confusion matrix $n_{ij}$: baris $i$ = referensi, kolom $j$ = hasil klasifikasi, $n_{i+}$ dan $n_{+j}$ jumlah baris dan kolom (Congalton, 1991).
+Confusion matrix $`n_{ij}`$: baris $`i`$ = referensi, kolom $`j`$ = hasil klasifikasi, $`n_{i+}`$ dan $`n_{+j}`$ jumlah baris dan kolom (Congalton, 1991).
 
 ```math
 \text{OA} = \frac{\sum_k n_{kk}}{n}, \qquad
@@ -238,7 +238,7 @@ F1_k = \frac{2\,n_{kk}}{n_{k+} + n_{+k}}
 
 ### Akurasi berbasis luas
 
-Mengikuti Olofsson dkk. (2014), cara yang juga dipakai Semi-Automatic Classification Plugin (Congedo, 2021). $W_i$ adalah proporsi luas kelas peta $i$ dan $n_{i\cdot}$ jumlah piksel uji yang dipetakan sebagai $i$:
+Mengikuti Olofsson dkk. (2014), cara yang juga dipakai Semi-Automatic Classification Plugin (Congedo, 2021). $`W_i`$ adalah proporsi luas kelas peta $`i`$ dan $`n_{i\cdot}`$ jumlah piksel uji yang dipetakan sebagai $`i`$:
 
 ```math
 \hat p_{ij} = W_i \,\frac{n_{ij}}{n_{i\cdot}}, \qquad
@@ -252,7 +252,7 @@ Mengikuti Olofsson dkk. (2014), cara yang juga dipakai Semi-Automatic Classifica
 \mathrm{SE}(\widehat{\text{OA}}) = \sqrt{\sum_i W_i^{2}\,\frac{\widehat{\text{UA}}_i\,(1-\widehat{\text{UA}}_i)}{n_{i\cdot}-1}}, \qquad \text{CI}_{95\%} = \pm \text{1,96}\, \mathrm{SE}
 ```
 
-Di sini indeks $i$ = kelas peta dan $j$ = kelas referensi. Karena piksel uji berasal dari sampel yang digambar tangan, bukan sampel acak, angka ini hanya pendekatan.
+Di sini indeks $`i`$ = kelas peta dan $`j`$ = kelas referensi. Karena piksel uji berasal dari sampel yang digambar tangan, bukan sampel acak, angka ini hanya pendekatan.
 
 ### Luas piksel
 
@@ -262,7 +262,7 @@ Pada grid geografis (EPSG:4326) luas sel dihitung per baris lintang:
 A_{\text{sel}} = R^{2}\,\Delta\lambda\,\lvert \sin\varphi_{1} - \sin\varphi_{2} \rvert, \qquad R = \text{6 371 008,8 m}
 ```
 
-Pada grid terproyeksi $A_{\text{sel}} = \lvert\Delta x\,\Delta y\rvert$.
+Pada grid terproyeksi $`A_{\text{sel}} = \lvert\Delta x\,\Delta y\rvert`$.
 
 ### K-means
 
@@ -272,15 +272,15 @@ Meminimalkan jumlah kuadrat jarak dalam klaster (Lloyd, 1982):
 J = \sum_{k=1}^{K} \sum_{x \in C_k} \lVert x - \mu_k \rVert^{2}
 ```
 
-Pusat awal dengan k-means++ (Arthur & Vassilvitskii, 2007): pusat berikutnya dipilih dengan peluang sebanding $D(x)^{2}$, jarak kuadrat ke pusat terdekat yang sudah ada. Iterasi berhenti setelah *Max iterations* atau bila bagian piksel yang berpindah klaster di bawah ambang. Input distandardisasi lebih dulu; klaster dihitung pada sampel piksel acak (default 50.000), lalu setiap piksel citra diberi pusat terdekat.
+Pusat awal dengan k-means++ (Arthur & Vassilvitskii, 2007): pusat berikutnya dipilih dengan peluang sebanding $`D(x)^{2}`$, jarak kuadrat ke pusat terdekat yang sudah ada. Iterasi berhenti setelah *Max iterations* atau bila bagian piksel yang berpindah klaster di bawah ambang. Input distandardisasi lebih dulu; klaster dihitung pada sampel piksel acak (default 50.000), lalu setiap piksel citra diberi pusat terdekat.
 
 ### ISODATA
 
 K-means dalam beberapa ronde (Ball & Hall, 1965). Setelah setiap ronde:
 
 - klaster dengan anggota < `minSize` dibuang;
-- klaster dengan simpangan baku $\sigma_{kj}$ > `maxStd` pada suatu input dipecah dua sepanjang input itu (sampai `maxK`);
-- dua pusat dengan $\lVert \mu_a - \mu_b \rVert$ < `minDist` digabung (sampai `minK`).
+- klaster dengan simpangan baku $`\sigma_{kj}`$ > `maxStd` pada suatu input dipecah dua sepanjang input itu (sampai `maxK`);
+- dua pusat dengan $`\lVert \mu_a - \mu_b \rVert`$ < `minDist` digabung (sampai `minK`).
 
 `maxStd` dan `minDist` dalam satuan simpangan baku karena input distandardisasi.
 
@@ -292,11 +292,11 @@ Koefisien Pearson pada 30.000 piksel acak:
 r_{ab} = \frac{\sum_i (a_i-\bar a)(b_i-\bar b)}{\sqrt{\sum_i (a_i-\bar a)^{2}}\,\sqrt{\sum_i (b_i-\bar b)^{2}}}
 ```
 
-Pasangan dengan $\lvert r \rvert$ mendekati 1 membawa informasi yang hampir sama.
+Pasangan dengan $`\lvert r \rvert`$ mendekati 1 membawa informasi yang hampir sama.
 
 ### Perubahan lahan
 
-Untuk hasil awal $A$ dan akhir $B$ pada grid yang sama:
+Untuk hasil awal $`A`$ dan akhir $`B`$ pada grid yang sama:
 
 ```math
 T_{ij} = \sum_{p} A_{\text{sel}}(p)\;[A(p) = i]\,[B(p) = j]
@@ -306,7 +306,7 @@ T_{ij} = \sum_{p} A_{\text{sel}}(p)\;[A(p) = i]\,[B(p) = j]
 \text{gain}_j = \sum_{i \ne j} T_{ij}, \qquad \text{loss}_i = \sum_{j \ne i} T_{ij}, \qquad \text{net}_k = \text{gain}_k - \text{loss}_k
 ```
 
-Diagram Sankey menggambar setiap $T_{ij}$ sebagai pita dengan lebar sebanding luasnya.
+Diagram Sankey menggambar setiap $`T_{ij}`$ sebagai pita dengan lebar sebanding luasnya.
 
 ### Smoothing
 
@@ -314,24 +314,24 @@ Filter mayoritas: setiap piksel mengambil kelas yang paling sering muncul di jen
 
 ## Indeks spektral
 
-$\rho$ adalah reflektans permukaan (0–1) pada band yang disebut: Blue, Green, Red, RE1–RE3 (red edge), NIR, $\mathrm{NIR}_{n}$ (NIR sempit), SWIR1, SWIR2. Band Sentinel-2 dicantumkan; sensor lain dipetakan ke peran yang sama (lihat [Sensor yang didukung](#sensor-yang-didukung)).
+$`\rho`$ adalah reflektans permukaan (0–1) pada band yang disebut: Blue, Green, Red, RE1–RE3 (red edge), NIR, $`\mathrm{NIR}_{n}`$ (NIR sempit), SWIR1, SWIR2. Band Sentinel-2 dicantumkan; sensor lain dipetakan ke peran yang sama (lihat [Sensor yang didukung](#sensor-yang-didukung)).
 
 | Indeks | Rumus | Band Sentinel-2 | Sumber |
 |---|---|---|---|
-| NDVI | $\dfrac{\rho_{\mathrm{NIR}} - \rho_{\mathrm{Red}}}{\rho_{\mathrm{NIR}} + \rho_{\mathrm{Red}}}$ | B8, B4 | Rouse dkk. (1974) |
-| EVI2 | $\text{2,5}\,\dfrac{\rho_{\mathrm{NIR}} - \rho_{\mathrm{Red}}}{\rho_{\mathrm{NIR}} + \text{2,4}\,\rho_{\mathrm{Red}} + 1}$ | B8, B4 | Jiang dkk. (2008) |
-| SAVI | $\dfrac{(1 + L)\,(\rho_{\mathrm{NIR}} - \rho_{\mathrm{Red}})}{\rho_{\mathrm{NIR}} + \rho_{\mathrm{Red}} + L},\quad L = \text{0,5}$ | B8, B4 | Huete (1988) |
-| GCVI | $\dfrac{\rho_{\mathrm{NIR}}}{\rho_{\mathrm{Green}}} - 1$ | B8, B3 | Gitelson dkk. (2003) |
-| NDWI | $\dfrac{\rho_{\mathrm{Green}} - \rho_{\mathrm{NIR}}}{\rho_{\mathrm{Green}} + \rho_{\mathrm{NIR}}}$ | B3, B8 | McFeeters (1996) |
-| NDMI | $\dfrac{\rho_{\mathrm{NIR}} - \rho_{\mathrm{SWIR1}}}{\rho_{\mathrm{NIR}} + \rho_{\mathrm{SWIR1}}}$ | B8, B11 | Gao (1996) |
-| MNDWI | $\dfrac{\rho_{\mathrm{Green}} - \rho_{\mathrm{SWIR1}}}{\rho_{\mathrm{Green}} + \rho_{\mathrm{SWIR1}}}$ | B3, B11 | Xu (2006) |
-| NDBI | $\dfrac{\rho_{\mathrm{SWIR1}} - \rho_{\mathrm{NIR}}}{\rho_{\mathrm{SWIR1}} + \rho_{\mathrm{NIR}}}$ | B11, B8 | Zha dkk. (2003) |
-| NBR | $\dfrac{\rho_{\mathrm{NIR}} - \rho_{\mathrm{SWIR2}}}{\rho_{\mathrm{NIR}} + \rho_{\mathrm{SWIR2}}}$ | B8, B12 | Key & Benson (2006) |
-| NDRE | $\dfrac{\rho_{\mathrm{NIR}_{n}} - \rho_{\mathrm{RE1}}}{\rho_{\mathrm{NIR}_{n}} + \rho_{\mathrm{RE1}}}$ | B8A, B5 | Barnes dkk. (2000) |
-| MVI | $\dfrac{\rho_{\mathrm{NIR}} - \rho_{\mathrm{Green}}}{\rho_{\mathrm{SWIR1}} - \rho_{\mathrm{Green}}}$ | B8, B3, B11 | Baloloy dkk. (2020) |
-| IRECI | $\dfrac{\rho_{\mathrm{RE3}} - \rho_{\mathrm{Red}}}{\rho_{\mathrm{RE1}} / \rho_{\mathrm{RE2}}}$ | B7, B4, B5, B6 | Frampton dkk. (2013) |
-| ATBI | $\dfrac{\rho_{\mathrm{NIR}} - \rho_{\mathrm{SWIR2}}}{\rho_{\mathrm{NIR}} + \rho_{\mathrm{SWIR2}}}\cdot\dfrac{\rho_{\mathrm{SWIR2}}}{\rho_{\mathrm{NIR}}}$ | B8, B12 | Bilal (2025) |
-| AMMI | $\dfrac{\rho_{\mathrm{NIR}} - \rho_{\mathrm{Red}}}{\rho_{\mathrm{Red}} + \rho_{\mathrm{SWIR1}}}\cdot\dfrac{\rho_{\mathrm{NIR}} - \rho_{\mathrm{SWIR1}}}{\rho_{\mathrm{SWIR1}} - \text{0,65}\,\rho_{\mathrm{Red}}}$ | B8, B4, B11 | Suyarso & Avianto (2022) |
+| NDVI | $`\dfrac{\rho_{\mathrm{NIR}} - \rho_{\mathrm{Red}}}{\rho_{\mathrm{NIR}} + \rho_{\mathrm{Red}}}`$ | B8, B4 | Rouse dkk. (1974) |
+| EVI2 | $`\text{2,5}\,\dfrac{\rho_{\mathrm{NIR}} - \rho_{\mathrm{Red}}}{\rho_{\mathrm{NIR}} + \text{2,4}\,\rho_{\mathrm{Red}} + 1}`$ | B8, B4 | Jiang dkk. (2008) |
+| SAVI | $`\dfrac{(1 + L)\,(\rho_{\mathrm{NIR}} - \rho_{\mathrm{Red}})}{\rho_{\mathrm{NIR}} + \rho_{\mathrm{Red}} + L},\quad L = \text{0,5}`$ | B8, B4 | Huete (1988) |
+| GCVI | $`\dfrac{\rho_{\mathrm{NIR}}}{\rho_{\mathrm{Green}}} - 1`$ | B8, B3 | Gitelson dkk. (2003) |
+| NDWI | $`\dfrac{\rho_{\mathrm{Green}} - \rho_{\mathrm{NIR}}}{\rho_{\mathrm{Green}} + \rho_{\mathrm{NIR}}}`$ | B3, B8 | McFeeters (1996) |
+| NDMI | $`\dfrac{\rho_{\mathrm{NIR}} - \rho_{\mathrm{SWIR1}}}{\rho_{\mathrm{NIR}} + \rho_{\mathrm{SWIR1}}}`$ | B8, B11 | Gao (1996) |
+| MNDWI | $`\dfrac{\rho_{\mathrm{Green}} - \rho_{\mathrm{SWIR1}}}{\rho_{\mathrm{Green}} + \rho_{\mathrm{SWIR1}}}`$ | B3, B11 | Xu (2006) |
+| NDBI | $`\dfrac{\rho_{\mathrm{SWIR1}} - \rho_{\mathrm{NIR}}}{\rho_{\mathrm{SWIR1}} + \rho_{\mathrm{NIR}}}`$ | B11, B8 | Zha dkk. (2003) |
+| NBR | $`\dfrac{\rho_{\mathrm{NIR}} - \rho_{\mathrm{SWIR2}}}{\rho_{\mathrm{NIR}} + \rho_{\mathrm{SWIR2}}}`$ | B8, B12 | Key & Benson (2006) |
+| NDRE | $`\dfrac{\rho_{\mathrm{NIR}_{n}} - \rho_{\mathrm{RE1}}}{\rho_{\mathrm{NIR}_{n}} + \rho_{\mathrm{RE1}}}`$ | B8A, B5 | Barnes dkk. (2000) |
+| MVI | $`\dfrac{\rho_{\mathrm{NIR}} - \rho_{\mathrm{Green}}}{\rho_{\mathrm{SWIR1}} - \rho_{\mathrm{Green}}}`$ | B8, B3, B11 | Baloloy dkk. (2020) |
+| IRECI | $`\dfrac{\rho_{\mathrm{RE3}} - \rho_{\mathrm{Red}}}{\rho_{\mathrm{RE1}} / \rho_{\mathrm{RE2}}}`$ | B7, B4, B5, B6 | Frampton dkk. (2013) |
+| ATBI | $`\dfrac{\rho_{\mathrm{NIR}} - \rho_{\mathrm{SWIR2}}}{\rho_{\mathrm{NIR}} + \rho_{\mathrm{SWIR2}}}\cdot\dfrac{\rho_{\mathrm{SWIR2}}}{\rho_{\mathrm{NIR}}}`$ | B8, B12 | Bilal (2025) |
+| AMMI | $`\dfrac{\rho_{\mathrm{NIR}} - \rho_{\mathrm{Red}}}{\rho_{\mathrm{Red}} + \rho_{\mathrm{SWIR1}}}\cdot\dfrac{\rho_{\mathrm{NIR}} - \rho_{\mathrm{SWIR1}}}{\rho_{\mathrm{SWIR1}} - \text{0,65}\,\rho_{\mathrm{Red}}}`$ | B8, B4, B11 | Suyarso & Avianto (2022) |
 
 Ekspresi sendiri boleh memakai `B2 … B12`, `B8A`, angka, `+ - * /`, dan kurung, misalnya `(B8 - B4) / (B8 + B4 + 0.5) * 1.5`.
 
