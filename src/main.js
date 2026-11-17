@@ -1,7 +1,7 @@
 // Image Classification: GeoLibre plugin UI. Core (indices, classifiers, accuracy, GeoTIFF writer) is prepended by build.mjs.
 const ID = "image-classification";
 const PANEL = ID + "-panel";
-const VERSION = "0.4.5";
+const VERSION = "0.4.7";
 const SRC = "icl-samples", DRAFT = "icl-draft";
 const ICON =
   "data:image/svg+xml;utf8," +

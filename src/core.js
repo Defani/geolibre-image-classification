@@ -20,12 +20,10 @@ const nd = (a, b) => (a + b === 0 ? 0 : (a - b) / (a + b));
 export const INDICES = {
   NDVI: { needs: ["B8", "B4"], fn: (b) => nd(b.B8, b.B4) },
   EVI2: { needs: ["B8", "B4"], fn: (b) => (2.5 * (b.B8 - b.B4)) / (b.B8 + 2.4 * b.B4 + 1) },
-  CAI: { needs: ["B12", "B11"], fn: (b) => b.B12 / Math.max(b.B11, 1e-6) },
-  NDWI: { needs: ["B8", "B11"], fn: (b) => nd(b.B8, b.B11) },
+  // McFeeters 1996: (Green - NIR) / (Green + NIR), open water
+  NDWI: { needs: ["B3", "B8"], fn: (b) => nd(b.B3, b.B8) },
   GCVI: { needs: ["B8", "B3"], fn: (b) => b.B8 / Math.max(b.B3, 1e-6) - 1 },
   SAVI: { needs: ["B8", "B4"], fn: (b) => (1.5 * (b.B8 - b.B4)) / (b.B8 + b.B4 + 0.5) },
-  PRI: { needs: ["B2", "B3"], fn: (b) => nd(b.B2, b.B3) },
-  HALL_COVER: { needs: ["B4", "B8", "B12"], fn: (b) => -0.017 * b.B4 - 0.007 * b.B8 - 0.079 * b.B12 + 5.22 },
   IRECI: { needs: ["B7", "B4", "B5", "B6"], fn: (b) => { const d = b.B5 / Math.max(b.B6, 1e-6); return d === 0 ? 0 : (b.B7 - b.B4) / d; } },
   NDRE: { needs: ["B8A", "B5"], fn: (b) => nd(b.B8A, b.B5) },
   MNDWI: { needs: ["B3", "B11"], fn: (b) => nd(b.B3, b.B11) },
@@ -34,13 +32,11 @@ export const INDICES = {
   NBR: { needs: ["B8", "B12"], fn: (b) => nd(b.B8, b.B12) },
   // Mangrove Vegetation Index, Baloloy et al. 2020 (ISPRS J. Photogramm. Remote Sens. 166): (NIR - Green) / (SWIR1 - Green)
   MVI: { needs: ["B8", "B3", "B11"], fn: (b) => { const d = b.B11 - b.B3; return d === 0 ? 0 : (b.B8 - b.B3) / d; } },
-  GVS: { needs: ["B8", "B4", "B12"], fn: (b) => gvs(b) },
-  NDFI: { needs: ["B8", "B4", "B12"], fn: (b) => { const g = gvs(b), npv = 1 - nd(b.B8, b.B4); return (g - npv) / Math.max(g + npv, 1e-6); } },
+  // Automated Temporal Burn Index, Bilal 2025 (Int. J. Appl. Earth Obs. Geoinf. 144, 104866): NBR x SWIR2 / NIR
+  ATBI: { needs: ["B8", "B12"], fn: (b) => (b.B8 === 0 ? 0 : nd(b.B8, b.B12) * (b.B12 / b.B8)) },
+  // Automatic Mangrove Map and Index, Suyarso & Avianto 2022 (Int. J. For. Res. 8103242)
+  AMMI: { needs: ["B8", "B4", "B11"], fn: (b) => { const l = b.B4 + b.B11, m = b.B11 - 0.65 * b.B4; return l === 0 || m === 0 ? 0 : ((b.B8 - b.B4) / l) * ((b.B8 - b.B11) / m); } },
 };
-function gvs(b) {
-  const ndvi = nd(b.B8, b.B4), nbr = nd(b.B8, b.B12);
-  return (ndvi * 100) / (Math.abs(ndvi) * 100 + Math.abs(nbr) * 100 + 1);
-}
 
 export const ROLES = ["B2", "B3", "B4", "B5", "B6", "B7", "B8", "B8A", "B11", "B12"];
 /** Landsat 8/9 band number -> Sentinel-2 role. */
