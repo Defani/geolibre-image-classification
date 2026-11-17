@@ -1,7 +1,7 @@
 // Image Classification: GeoLibre plugin UI. Core (indices, classifiers, accuracy, GeoTIFF writer) is prepended by build.mjs.
 const ID = "image-classification";
 const PANEL = ID + "-panel";
-const VERSION = "0.4.1";
+const VERSION = "0.4.5";
 const SRC = "icl-samples", DRAFT = "icl-draft";
 const ICON =
   "data:image/svg+xml;utf8," +
@@ -1514,7 +1514,7 @@ function tabLayers() {
     return `<button type="button" class="icl-chip${on ? " on" : ""}" data-idx="${esc(x.n)}" aria-pressed="${on}" title="${esc(why)}"${ok ? "" : " disabled"}>${esc(x.n)}</button>`;
   }).join("");
   const nIdx = indexDefs().length, nB = selectedBands().length;
-  const gridOpts = S.sources.filter((s) => s.tiff).map((s) => [s.key, `${s.name} (${nf(s.tiff.width)} × ${nf(s.tiff.height)})`]);
+  const gridOpts = S.sources.filter((s) => s.tiff && (!S.win || setKeyOf(s) === activeSet())).map((s) => [s.key, `${s.name} (${nf(s.tiff.width)} × ${nf(s.tiff.height)})`]);
   return `
   <section class="icl-sec">
     <div class="icl-mid"><h3 class="icl-head">Input layers</h3><span class="icl-lab">${nB} selected</span>
@@ -1912,7 +1912,7 @@ function onChange(e) {
   if (ds.band) { S.inputs[ds.band].on = t.checked; invalidate(); return render(); }
   if (ds.role) { S.inputs[ds.role].role = t.value; S.inputs[ds.role].auto = false; invalidate(); return render(); }
   if (ds.color) { const c = S.classes.find((x) => x.code === +ds.color); if (c) c.color = t.value; syncMap(); renderProfile(); renderFloat(); return; }
-  if (ds.name) { const c = S.classes.find((x) => x.code === +ds.name); if (c) c.name = t.value.trim() || "Class " + c.code; syncMap(); renderProfile(); renderHint(); return; }
+  if (ds.name) { const c = S.classes.find((x) => x.code === +ds.name); if (c) c.name = t.value.trim() || "Class " + c.code; syncMap(); renderProfile(); renderHint(); if (S.win) winRefresh(); return; }
   if (ds.p) {
     const p = P(), k = ds.p, num = t.type === "range" || t.type === "number" || k === "smooth";
     p[k] = t.type === "checkbox" ? t.checked : num ? +t.value : t.value;

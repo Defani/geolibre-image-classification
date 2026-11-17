@@ -273,7 +273,9 @@
 .icw-seg { display: flex; border: 1px solid hsl(var(--input)); border-radius: 8px; padding: 2px; gap: 2px; }
 .icw-seg button { height: 26px; padding: 0 10px; border: 0; border-radius: 6px; background: transparent; font-weight: 500; color: hsl(var(--muted-foreground)); cursor: pointer; }
 .icw-seg button.on { background: hsl(var(--foreground)); color: hsl(var(--background)); }
-.icw-row2 { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.icw-row2 { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; align-items: flex-end; }
+.icw-swap { height: 30px; min-width: 34px; border: 1px solid hsl(var(--border)); border-radius: 6px; background: hsl(var(--muted)); color: hsl(var(--foreground)); cursor: pointer; font-size: 15px; }
+.icw-swap:hover { background: hsl(var(--accent)); }
 /* slim slider: hairline track, small white knob */
 .icw-rg { -webkit-appearance: none; appearance: none; width: 100%; height: 18px; margin: 0; background: transparent; cursor: pointer; }
 .icw-rg::-webkit-slider-runnable-track { height: 3px; border-radius: 2px; background: hsl(var(--border)); }

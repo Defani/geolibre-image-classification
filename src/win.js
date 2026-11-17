@@ -55,13 +55,25 @@ function openWindow() {
   w.addEventListener("mousedown", onChartDown);
   w.addEventListener("dblclick", onChartDbl);
   w.querySelector("[data-w=drag]").addEventListener("mousedown", winDrag);
+  window.addEventListener("keydown", winKey, true);
   // the right dock is the workflow panel main.js renders into (S.root)
   mount(w.querySelector("[data-w=right]"));
   winRefresh();
   return true;
 }
 const wq = (sel) => S.win?.querySelector(sel);
+/** The shortcuts the menus show: Ctrl+E, Ctrl+Z, F5, 1-6 for the views, 0 to fit, P G C R H for the tools. */
+function winKey(e) {
+  if (!S.win || S.win.hidden || e.altKey || e.metaKey) return;
+  const typing = e.target.closest?.("input, textarea, select, [contenteditable=true]");
+  if (e.key === "Escape") { if (S.exp) { S.exp = null; return winRefresh(); } if (S.draft.length) { S.draft = []; return drawViewer(); } if (S.menuOpen) return winDo(""), winRefresh(); return; }
+  const k = (e.ctrlKey ? "Ctrl+" : "") + (e.key.length === 1 ? e.key.toUpperCase() : e.key);
+  if (typing && !e.ctrlKey && k !== "F5") return;
+  if (typing && k === "Ctrl+Z") return; // undo inside a text field stays the browser's
+  for (const [, items] of MENUS()) for (const it of items) if (it !== "-" && it[1] && it[1] === k) { e.preventDefault(); e.stopPropagation(); return winDo(it[2]); }
+}
 function closeWindow() {
+  window.removeEventListener("keydown", winKey, true);
   S.win?.remove(); S.win = null; S.pill?.remove(); S.pill = null; S.viewer = null;
   if (S.root) { S.root.remove(); }
 }
@@ -238,15 +250,18 @@ function layerChoices() {
 
 S.imgCache = new Map(); // key -> { canvas, grid }
 async function ensureViewImages() {
+  // applyToSet switches the active set for a moment; drawing then would mix the two sets
+  if (S.applying) return;
   try {
     if (!selectedBands().length) return;
-    const st = await ensureStack();
+    const set = activeSet(), st = await ensureStack();
+    if (S.applying || set !== activeSet()) return;
     const k = "img:" + activeSet() + "|" + st.key + "|" + compChannels().join(",");
     if (!S.imgCache.has(k)) S.imgCache.set(k, { canvas: compositeCanvas(st), grid: st.grid });
     S.baseKey = k;
     S.imgCache.set("img:" + activeSet(), S.imgCache.get(k));
     if (!S.vp) fitView();
-  } catch (e) { say(e?.message ?? String(e)); }
+  } catch (e) { console.warn("[image-classification] view", e); say(e?.message ?? String(e)); }
 }
 function compositeCanvas(st) {
   const fc = featureCache(st), names = compChannels(), L = names.map((nm) => fc.layers[fc.names.indexOf(nm)]).map((x, i, a) => x ?? a.find(Boolean) ?? fc.layers[0]);
@@ -432,7 +447,7 @@ function drawViewer() {
 
 /** matplotlib-style confusion or change matrix: square Blues cells, colour bar, axis titles, dashed grid. */
 function matrixSvg(id, o) {
-  const K = o.rows.length, side = Math.min(360, Math.max(200, K * 56)), cs = side / K, L = 30 + Math.max(...o.rowNames.map((n) => tw(n, 11))), T = o.title ? 52 : 30, W = L + side + 96, H = T + side + 54;
+  const K = o.rows.length, side = Math.min(360, Math.max(200, K * 56)), cs = side / K, L = 30 + Math.max(...o.rowNames.map((n) => tw(n, 11))), T = o.title ? 40 : 14, ex = 14 + 0.6 * Math.max(...o.colNames.map((n) => tw(n, 11))), W = L + side + 96, H = T + side + ex + 34;
   const vmax = o.vmax ?? Math.max(1, ...o.rows.flat()), x0 = L, y0 = T;
   let s = svgOpen(id, W, H, o.title || o.label) + `<defs><linearGradient id="${id}-cb" x1="0" x2="0" y1="1" y2="0">${HEAT_STOPS.map((c, i) => `<stop offset="${(i / (HEAT_STOPS.length - 1)).toFixed(3)}" stop-color="${c}"/>`).join("")}</linearGradient></defs>`;
   if (o.title) s += `<text x="${x0 + side / 2}" y="20" text-anchor="middle" font-size="16" fill="#111827">${esc(o.title)}</text>`;
@@ -444,11 +459,11 @@ function matrixSvg(id, o) {
   for (let i = 0; i < K; i++) {
     const c = x0 + (i + 0.5) * cs, r = y0 + (i + 0.5) * cs;
     s += `<line x1="${c.toFixed(1)}" x2="${c.toFixed(1)}" y1="${y0}" y2="${y0 + side}" stroke="#9ca3af" stroke-opacity=".55" stroke-dasharray="3 3"/><line x1="${x0}" x2="${x0 + side}" y1="${r.toFixed(1)}" y2="${r.toFixed(1)}" stroke="#9ca3af" stroke-opacity=".55" stroke-dasharray="3 3"/>`;
-    s += `<text x="${c.toFixed(1)}" y="${y0 - 7}" text-anchor="middle" font-size="11" fill="#111827">${esc(o.colNames[i])}</text><line x1="${c.toFixed(1)}" x2="${c.toFixed(1)}" y1="${y0 + side}" y2="${y0 + side + 4}" stroke="#111827"/>`;
+    s += `<text transform="translate(${c.toFixed(1)},${y0 + side + 10}) rotate(-35)" text-anchor="end" dominant-baseline="central" font-size="11" fill="#111827">${esc(o.colNames[i])}</text><line x1="${c.toFixed(1)}" x2="${c.toFixed(1)}" y1="${y0 + side}" y2="${y0 + side + 4}" stroke="#111827"/>`;
     s += `<text x="${x0 - 7}" y="${r.toFixed(1)}" text-anchor="end" dominant-baseline="central" font-size="11" fill="#111827">${esc(o.rowNames[i])}</text><line x1="${x0 - 4}" x2="${x0}" y1="${r.toFixed(1)}" y2="${r.toFixed(1)}" stroke="#111827"/>`;
   }
   s += `<rect x="${x0}" y="${y0}" width="${side}" height="${side}" fill="none" stroke="#111827"/>`;
-  s += `<text x="${x0 + side / 2}" y="${y0 + side + 30}" text-anchor="middle" font-size="13" fill="#111827">${esc(o.xLabel)}</text><text transform="translate(14,${y0 + side / 2}) rotate(-90)" text-anchor="middle" font-size="13" fill="#111827">${esc(o.yLabel)}</text>`;
+  s += `<text x="${x0 + side / 2}" y="${y0 + side + ex + 20}" text-anchor="middle" font-size="13" fill="#111827">${esc(o.xLabel)}</text><text transform="translate(14,${y0 + side / 2}) rotate(-90)" text-anchor="middle" font-size="13" fill="#111827">${esc(o.yLabel)}</text>`;
   const cbx = x0 + side + 18;
   s += `<rect x="${cbx}" y="${y0}" width="14" height="${side}" fill="url(#${id}-cb)" stroke="#111827" stroke-width=".8"/>`;
   const top = o.share ? 1 : vmax, ticks = niceTicks(0, top, 5).ticks.filter((t) => t <= top + 1e-9);
@@ -503,7 +518,7 @@ function donutSvg(id, items, centre, unit) {
 }
 /** Spectral profile against wavelength, band numbers on top, ±1 SD of the selected class on a second axis. */
 function profileSvg(id, prof) {
-  const W = 760, H = 320, x0 = 70, x1 = 560, y0 = 270, y1 = 50;
+  const W = 800, H = 320, x0 = 70, x1 = 560, y0 = 270, y1 = 50;
   const nmMin = Math.min(...prof.nm) - 60, nmMax = Math.max(...prof.nm) + 60;
   const top = niceTicks(0, Math.max(...prof.lines.flatMap((l) => l.mean.map((m, i) => m + (l.sd[i] ?? 0)))), 6), sdTop = niceTicks(0, Math.max(1e-6, ...prof.lines.flatMap((l) => l.sd)), 5);
   const X = (w) => x0 + ((w - nmMin) / (nmMax - nmMin)) * (x1 - x0), Y = (v) => y0 - (v / top.hi) * (y0 - y1), Y2 = (v) => y0 - (v / sdTop.hi) * (y0 - y1);
@@ -527,10 +542,10 @@ function profileSvg(id, prof) {
   prof.lines.forEach((l, k) => {
     s += `<path d="M${l.mean.map((m, i) => X(prof.nm[i]).toFixed(1) + " " + Y(m).toFixed(1)).join("L")}" fill="none" stroke="${esc(l.color)}" stroke-width="${l.active ? 2.8 : 2}" stroke-dasharray="${k % 3 === 2 ? "7 4" : k % 3 === 1 && k > 3 ? "2 3" : ""}" stroke-linejoin="round"/>`;
     const y = 64 + k * 22;
-    s += `<line x1="610" x2="640" y1="${y}" y2="${y}" stroke="${esc(l.color)}" stroke-width="2.2" stroke-dasharray="${k % 3 === 2 ? "7 4" : k % 3 === 1 && k > 3 ? "2 3" : ""}"/><text x="648" y="${y}" dominant-baseline="central" font-size="12" fill="#111827">${esc(l.name)}</text>`;
+    s += `<line x1="634" x2="664" y1="${y}" y2="${y}" stroke="${esc(l.color)}" stroke-width="2.2" stroke-dasharray="${k % 3 === 2 ? "7 4" : k % 3 === 1 && k > 3 ? "2 3" : ""}"/><text x="672" y="${y}" dominant-baseline="central" font-size="12" fill="#111827">${esc(l.name)}</text>`;
   });
   const ly = 64 + prof.lines.length * 22;
-  s += `<line x1="610" x2="640" y1="${ly}" y2="${ly}" stroke="#6b7280"/><rect x="621.5" y="${ly - 3.5}" width="7" height="7" fill="#fff" stroke="#374151"/><text x="648" y="${ly}" dominant-baseline="central" font-size="12" fill="#111827">±1 SD (${esc(sel?.name ?? "")})</text>`;
+  s += `<line x1="634" x2="664" y1="${ly}" y2="${ly}" stroke="#6b7280"/><rect x="645.5" y="${ly - 3.5}" width="7" height="7" fill="#fff" stroke="#374151"/><text x="672" y="${ly}" dominant-baseline="central" font-size="12" fill="#111827">±1 SD (${esc(sel?.name ?? "")})</text>`;
   return s + svgClose(id);
 }
 function sankeySvg(id, T, from, to, colors, labels) {
@@ -553,7 +568,7 @@ function sankeySvg(id, T, from, to, colors, labels) {
   return s + svgClose(id);
 }
 function gainsSvg(id, names, colors, deltas) {
-  const W = 760, rowH = 30, H = 40 + names.length * rowH + 30, mx = niceTicks(0, Math.max(1, ...deltas.map(Math.abs)), 4), cx = 430, half = 270, X = (v) => cx + (v / mx.hi) * half;
+  const W = 800, rowH = 30, H = 40 + names.length * rowH + 30, mx = niceTicks(0, Math.max(1, ...deltas.map(Math.abs)), 4), cx = 480, half = 220, X = (v) => cx + (v / mx.hi) * half;
   let s = svgOpen(id, W, H, "Gains and losses");
   for (const t of [...mx.ticks.map((t) => -t).reverse(), ...mx.ticks.slice(1)]) s += `<line x1="${X(t).toFixed(1)}" x2="${X(t).toFixed(1)}" y1="14" y2="${H - 30}" stroke="#e5e7eb"/><text x="${X(t).toFixed(1)}" y="${H - 14}" text-anchor="middle" font-size="10.5" fill="#374151">${t > 0 ? "+" : ""}${nf(t)}</text>`;
   s += `<line x1="${cx}" x2="${cx}" y1="14" y2="${H - 30}" stroke="#374151"/>`;
@@ -668,10 +683,14 @@ function accView() {
 function changeView() {
   const list = S.results;
   if (list.length < 2) return `<div class="icw-empty big">Land cover change compares two results on the same grid. Classify one image, then use Classify → Classify another image with this model (or run again on another date) to get the second.</div>`;
-  if (!(S.chg.a >= 0 && S.chg.a < list.length)) S.chg.a = Math.max(0, list.length - 2);
-  if (!(S.chg.b >= 0 && S.chg.b < list.length) || S.chg.b === S.chg.a) S.chg.b = list.length - 1 === S.chg.a ? 0 : list.length - 1;
+  if (!(S.chg.a >= 0 && S.chg.a < list.length) || !(S.chg.b >= 0 && S.chg.b < list.length) || S.chg.a === S.chg.b) {
+    // earliest first: names that say before / pre / sebelum, else an earlier year, else the order they were made
+    const rank = (r, i) => (/\b(pre|before|sebelum)|pre[-_ ]?fire/i.test(r.name) ? -1e6 : /\b(post|after|sesudah)|post[-_ ]?fire/i.test(r.name) ? 1e6 : 0) + (+(r.name.match(/(19|20)\d\d/)?.[0] ?? 0)) * 10 + i;
+    const two = list.map((r, i) => [rank(r, i), i]).slice(-2).sort((x, y) => x[0] - y[0]);
+    [S.chg.a, S.chg.b] = [two[0][1], two[1][1]];
+  }
   const A = list[S.chg.a], B = list[S.chg.b], pick = (k, v) => `<select data-wk="${k}">${list.map((r, i) => `<option value="${i}"${i === v ? " selected" : ""}>${esc(r.name)}</option>`).join("")}</select>`;
-  const head = `<div class="icw-row2"><label class="icw-f"><span>From (earlier)</span>${pick("chgA", S.chg.a)}</label><label class="icw-f"><span>To (later)</span>${pick("chgB", S.chg.b)}</label></div>`;
+  const head = `<div class="icw-row2"><label class="icw-f"><span>From (earlier)</span>${pick("chgA", S.chg.a)}</label><button type="button" class="icw-swap" data-do="w:swapChg" title="Swap earlier and later" aria-label="Swap earlier and later">⇄</button><label class="icw-f"><span>To (later)</span>${pick("chgB", S.chg.b)}</label></div>`;
   if (A.grid.width !== B.grid.width || A.grid.height !== B.grid.height) return head + `<div class="icw-empty">The two results are on different grids (${A.grid.width} × ${A.grid.height} and ${B.grid.width} × ${B.grid.height}). Classify both images on the same reference grid.</div>`;
   const codes = [...new Set([...A.codes, ...B.codes])].sort((x, y) => x - y), meta = (c) => B.classes.find((x) => x.code === c) ?? A.classes.find((x) => x.code === c) ?? { name: "Class " + c, color: "#888" };
   const key = S.chg.a + ":" + S.chg.b + ":" + (A.version ?? 0) + ":" + (B.version ?? 0);
@@ -795,6 +814,7 @@ async function applyToSet(key) {
   if (!r?.model?.trees && !r?.model?.rounds && !r?.model?.pairs) return say("Run a supervised classification first.");
   if (S.busy) return;
   const prev = S.set;
+  S.applying = true;
   S.busy = true; render();
   try {
     S.set = key;
@@ -811,11 +831,11 @@ async function applyToSet(key) {
       progress("Classifying " + setNameOf(key), start / n); await tick();
     }
     const maxCode = Math.max(...r.codes);
-    pushResult({ ...r, kind: "applied", accTest: null, grid: g, cls, areas: classAreas(cls, g, maxCode), name: `Land Cover (${setNameOf(key)})`, version: 0 });
+    pushResult({ ...r, kind: "applied", accTest: null, patches: null, grid: g, cls, areas: classAreas(cls, g, maxCode), name: `Land Cover (${setNameOf(key)})`, version: 0 });
     wlog(`Applied the model to ${setNameOf(key)}.`);
     S.imgCache.set("img:" + key, { canvas: compositeCanvas(st), grid: g });
-  } catch (e) { say(e?.message ?? String(e)); }
-  finally { S.set = prev; S.busy = false; progress(null); render(); }
+  } catch (e) { console.warn("[image-classification] apply to", key, e); say(e?.message ?? String(e)); }
+  finally { S.set = prev; S.applying = false; S.busy = false; progress(null); render(); }
 }
 function smoothResult(size) {
   const r = S.result;
@@ -942,11 +962,16 @@ function winDo(a) {
     case "w:min": return minimiseWindow();
     case "w:close": return closeWindow();
     case "w:fit": fitView(); return drawViewer();
+    case "w:swapChg": [S.chg.a, S.chg.b] = [S.chg.b, S.chg.a]; return renderView();
     case "w:zin": case "w:zout": { if (!S.vp || !S.viewer) return; const f = a === "w:zin" ? 1.4 : 1 / 1.4, W = S.viewer.el.clientWidth / 2, H = S.viewer.el.clientHeight / 2; S.vp = { k: S.vp.k * f, x: W - (W - S.vp.x) * f, y: H - (H - S.vp.y) * f }; return drawViewer(); }
     case "w:exp": S.exp = { prefix: (activeSetName() || "classification") + "_", sel: { tif: true, poly: true, acc: true, charts: true, samples: true, change: S.results.length > 1 } }; return winRefresh();
     case "w:expClose": S.exp = null; return winRefresh();
     case "w:expGo": return runExport();
-    case "w:send": if (S.result) addResultLayer().then(() => wlog(`Sent "${S.result.name}" to the GeoLibre map.`)); return;
+    case "w:send": if (S.result) addResultLayer().then(() => {
+      const g = S.result.grid, c = [pxToLl(0, 0, g), pxToLl(g.width, 0, g), pxToLl(0, g.height, g), pxToLl(g.width, g.height, g)];
+      try { S.app.fitBounds?.([Math.min(...c.map((q) => q[0])), Math.min(...c.map((q) => q[1])), Math.max(...c.map((q) => q[0])), Math.max(...c.map((q) => q[1]))]); } catch { /* the host may not support it */ }
+      wlog(`Sent "${S.result.name}" to the GeoLibre map.`);
+    }); return;
     case "w:comp": S.tab = "layers"; render(); setTimeout(() => $("[data-sec=composite]")?.scrollIntoView({ block: "start" }), 50); return winRefresh();
     case "w:calc": S.tab = "layers"; render(); setTimeout(() => $("[data-k=cExpr]")?.focus(), 50); return winRefresh();
     case "w:sup": P().kind = "sup"; S.tab = "model"; render(); return winRefresh();
