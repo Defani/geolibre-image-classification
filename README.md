@@ -170,44 +170,44 @@ In the example, about 1,295 ha of pre-fire forest became burned area; burned are
 
 ### Notation
 
-$n$ number of training pixels, $d$ number of inputs (bands + indices), $K$ number of classes, $n_k$ number of pixels of class $k$.
+$`n`$ number of training pixels, $`d`$ number of inputs (bands + indices), $`K`$ number of classes, $`n_k`$ number of pixels of class $`k`$.
 
 ### Random Forest
 
-Each tree is trained on a bootstrap sample of size $\text{bag} \cdot n$. At each node $m = \mathrm{round}(\sqrt{d})$ variables are drawn at random, and the split that most reduces Gini impurity is chosen:
+Each tree is trained on a bootstrap sample of size $`\text{bag} \cdot n`$. At each node $`m = \mathrm{round}(\sqrt{d})`$ variables are drawn at random, and the split that most reduces Gini impurity is chosen:
 
 ```math
 G(t) = 1 - \sum_{k=1}^{K} p_{k}(t)^{2}, \qquad \Delta G = n_t\,G(t) - n_{L}\,G(L) - n_{R}\,G(R)
 ```
 
-The prediction is the majority vote of all trees. The importance of variable $j$ is the sum of $\Delta G$ over the splits on $j$, normalised to sum to 1. *Out-of-bag* accuracy uses, for each pixel, only the trees that did not draw it in their bootstrap (Breiman, 2001).
+The prediction is the majority vote of all trees. The importance of variable $`j`$ is the sum of $`\Delta G`$ over the splits on $`j`$, normalised to sum to 1. *Out-of-bag* accuracy uses, for each pixel, only the trees that did not draw it in their bootstrap (Breiman, 2001).
 
 ### Gradient Tree Boost
 
-An additive model per class $F_k(x)$ with softmax and multinomial deviance (Friedman, 2001):
+An additive model per class $`F_k(x)`$ with softmax and multinomial deviance (Friedman, 2001):
 
 ```math
 p_k(x) = \frac{e^{F_k(x)}}{\sum_{j} e^{F_j(x)}}, \qquad L = -\sum_{i=1}^{n}\sum_{k=1}^{K} y_{ik}\,\ln p_k(x_i)
 ```
 
-In every round, for every class, a small tree is fitted to the gradient $g_{ik} = y_{ik} - p_k(x_i)$ with hessian $h_{ik} = p_k(x_i)\,(1-p_k(x_i))$, then $F_k \leftarrow F_k + \nu\, f_k$ with shrinkage $\nu$ (default 0.05) and row subsampling (default 0.7).
+In every round, for every class, a small tree is fitted to the gradient $`g_{ik} = y_{ik} - p_k(x_i)`$ with hessian $`h_{ik} = p_k(x_i)\,(1-p_k(x_i))`$, then $`F_k \leftarrow F_k + \nu\, f_k`$ with shrinkage $`\nu`$ (default 0.05) and row subsampling (default 0.7).
 
 ### Support Vector Machine
 
-C-SVC (Cortes & Vapnik, 1995), one-vs-one for multiple classes, solved with maximal-violating-pair SMO (Keerthi et al., 2001). Inputs are standardised, $z = (x-\mu)/\sigma$. The dual problem:
+C-SVC (Cortes & Vapnik, 1995), one-vs-one for multiple classes, solved with maximal-violating-pair SMO (Keerthi et al., 2001). Inputs are standardised, $`z = (x-\mu)/\sigma`$. The dual problem:
 
 ```math
 \max_{\alpha}\; \sum_i \alpha_i - \tfrac12 \sum_{i,j} \alpha_i \alpha_j y_i y_j K(x_i, x_j) \quad \text{s.t. } 0 \le \alpha_i \le C,\; \sum_i \alpha_i y_i = 0
 ```
 
-| Kernel | $K(x, x')$ |
+| Kernel | $`K(x, x')`$ |
 |---|---|
-| RBF | $\exp(-\gamma\,\lVert x - x' \rVert^{2})$ |
-| Linear | $x^\top x'$ |
-| Polynomial | $(\gamma\, x^\top x' + c_0)^{p}$ |
-| Sigmoid | $\tanh(\gamma\, x^\top x' + c_0)$ |
+| RBF | $`\exp(-\gamma\,\lVert x - x' \rVert^{2})`$ |
+| Linear | $`x^\top x'`$ |
+| Polynomial | $`(\gamma\, x^\top x' + c_0)^{p}`$ |
+| Sigmoid | $`\tanh(\gamma\, x^\top x' + c_0)`$ |
 
-The $\gamma$ you enter is divided by $d$. To keep the kernel matrix small, the SVM is trained on at most 2,000 stratified pixels.
+The $`\gamma`$ you enter is divided by $`d`$. To keep the kernel matrix small, the SVM is trained on at most 2,000 stratified pixels.
 
 ### Balanced class weights
 
@@ -217,11 +217,11 @@ With *Balance classes* each class gets the same weight as scikit-learn's `class_
 w_k = \frac{n}{K\, n_k}
 ```
 
-RF draws the bootstrap with equal numbers per class, GTB multiplies gradient and hessian by $w_k$, SVM uses $C_k = w_k C$.
+RF draws the bootstrap with equal numbers per class, GTB multiplies gradient and hessian by $`w_k`$, SVM uses $`C_k = w_k C`$.
 
 ### Accuracy
 
-Confusion matrix $n_{ij}$: row $i$ = reference, column $j$ = classified; $n_{i+}$ and $n_{+j}$ are row and column totals (Congalton, 1991).
+Confusion matrix $`n_{ij}`$: row $`i`$ = reference, column $`j`$ = classified; $`n_{i+}`$ and $`n_{+j}`$ are row and column totals (Congalton, 1991).
 
 ```math
 \text{OA} = \frac{\sum_k n_{kk}}{n}, \qquad
@@ -238,7 +238,7 @@ F1_k = \frac{2\,n_{kk}}{n_{k+} + n_{+k}}
 
 ### Area-based accuracy
 
-Following Olofsson et al. (2014), the estimator the Semi-Automatic Classification Plugin also reports (Congedo, 2021). $W_i$ is the mapped area proportion of class $i$ and $n_{i\cdot}$ the number of test pixels mapped as $i$:
+Following Olofsson et al. (2014), the estimator the Semi-Automatic Classification Plugin also reports (Congedo, 2021). $`W_i`$ is the mapped area proportion of class $`i`$ and $`n_{i\cdot}`$ the number of test pixels mapped as $`i`$:
 
 ```math
 \hat p_{ij} = W_i \,\frac{n_{ij}}{n_{i\cdot}}, \qquad
@@ -252,7 +252,7 @@ Following Olofsson et al. (2014), the estimator the Semi-Automatic Classificatio
 \mathrm{SE}(\widehat{\text{OA}}) = \sqrt{\sum_i W_i^{2}\,\frac{\widehat{\text{UA}}_i\,(1-\widehat{\text{UA}}_i)}{n_{i\cdot}-1}}, \qquad \text{CI}_{95\%} = \pm 1.96\, \mathrm{SE}
 ```
 
-Here $i$ is the map class and $j$ the reference class. Because the test pixels come from hand-drawn samples rather than a random sample, these figures are only an approximation.
+Here $`i`$ is the map class and $`j`$ the reference class. Because the test pixels come from hand-drawn samples rather than a random sample, these figures are only an approximation.
 
 ### Pixel area
 
@@ -262,7 +262,7 @@ On a geographic grid (EPSG:4326) the cell area is computed per row of latitude:
 A_{\text{cell}} = R^{2}\,\Delta\lambda\,\lvert \sin\varphi_{1} - \sin\varphi_{2} \rvert, \qquad R = 6\,371\,008.8\ \text{m}
 ```
 
-On a projected grid $A_{\text{cell}} = \lvert\Delta x\,\Delta y\rvert$.
+On a projected grid $`A_{\text{cell}} = \lvert\Delta x\,\Delta y\rvert`$.
 
 ### K-means
 
@@ -272,15 +272,15 @@ Minimises the within-cluster sum of squares (Lloyd, 1982):
 J = \sum_{k=1}^{K} \sum_{x \in C_k} \lVert x - \mu_k \rVert^{2}
 ```
 
-Initial centres by k-means++ (Arthur & Vassilvitskii, 2007): each next centre is drawn with probability proportional to $D(x)^{2}$, the squared distance to the nearest centre so far. Iteration stops after *Max iterations* or when the share of pixels changing cluster falls below the threshold. Inputs are standardised first; clusters are fitted on a random pixel sample (default 50,000), then every image pixel gets its nearest centre.
+Initial centres by k-means++ (Arthur & Vassilvitskii, 2007): each next centre is drawn with probability proportional to $`D(x)^{2}`$, the squared distance to the nearest centre so far. Iteration stops after *Max iterations* or when the share of pixels changing cluster falls below the threshold. Inputs are standardised first; clusters are fitted on a random pixel sample (default 50,000), then every image pixel gets its nearest centre.
 
 ### ISODATA
 
 K-means in several rounds (Ball & Hall, 1965). After each round:
 
 - clusters with fewer than `minSize` members are dropped;
-- a cluster whose standard deviation $\sigma_{kj}$ in some input exceeds `maxStd` is split in two along that input (up to `maxK`);
-- two centres with $\lVert \mu_a - \mu_b \rVert$ < `minDist` are merged (down to `minK`).
+- a cluster whose standard deviation $`\sigma_{kj}`$ in some input exceeds `maxStd` is split in two along that input (up to `maxK`);
+- two centres with $`\lVert \mu_a - \mu_b \rVert`$ < `minDist` are merged (down to `minK`).
 
 `maxStd` and `minDist` are in standard-deviation units because the inputs are standardised.
 
@@ -292,11 +292,11 @@ Pearson coefficient on 30,000 random pixels:
 r_{ab} = \frac{\sum_i (a_i-\bar a)(b_i-\bar b)}{\sqrt{\sum_i (a_i-\bar a)^{2}}\,\sqrt{\sum_i (b_i-\bar b)^{2}}}
 ```
 
-Pairs with $\lvert r \rvert$ close to 1 carry almost the same information.
+Pairs with $`\lvert r \rvert`$ close to 1 carry almost the same information.
 
 ### Land cover change
 
-For an earlier result $A$ and a later result $B$ on the same grid:
+For an earlier result $`A`$ and a later result $`B`$ on the same grid:
 
 ```math
 T_{ij} = \sum_{p} A_{\text{cell}}(p)\;[A(p) = i]\,[B(p) = j]
@@ -306,7 +306,7 @@ T_{ij} = \sum_{p} A_{\text{cell}}(p)\;[A(p) = i]\,[B(p) = j]
 \text{gain}_j = \sum_{i \ne j} T_{ij}, \qquad \text{loss}_i = \sum_{j \ne i} T_{ij}, \qquad \text{net}_k = \text{gain}_k - \text{loss}_k
 ```
 
-The Sankey diagram draws each $T_{ij}$ as a band whose width is proportional to its area.
+The Sankey diagram draws each $`T_{ij}`$ as a band whose width is proportional to its area.
 
 ### Smoothing
 
@@ -314,24 +314,24 @@ Majority filter: each pixel takes the most frequent class in its 3 × 3 or 5 × 
 
 ## Spectral indices
 
-$\rho$ is surface reflectance (0–1) in the band named: Blue, Green, Red, RE1–RE3 (red edge), NIR, $\mathrm{NIR}_{n}$ (narrow NIR), SWIR1, SWIR2. The Sentinel-2 bands are listed; other sensors are mapped to the same roles (see [Supported sensors](#supported-sensors)).
+$`\rho`$ is surface reflectance (0–1) in the band named: Blue, Green, Red, RE1–RE3 (red edge), NIR, $`\mathrm{NIR}_{n}`$ (narrow NIR), SWIR1, SWIR2. The Sentinel-2 bands are listed; other sensors are mapped to the same roles (see [Supported sensors](#supported-sensors)).
 
 | Index | Formula | Sentinel-2 bands | Source |
 |---|---|---|---|
-| NDVI | $\dfrac{\rho_{\mathrm{NIR}} - \rho_{\mathrm{Red}}}{\rho_{\mathrm{NIR}} + \rho_{\mathrm{Red}}}$ | B8, B4 | Rouse et al. (1974) |
-| EVI2 | $2.5\,\dfrac{\rho_{\mathrm{NIR}} - \rho_{\mathrm{Red}}}{\rho_{\mathrm{NIR}} + 2.4\,\rho_{\mathrm{Red}} + 1}$ | B8, B4 | Jiang et al. (2008) |
-| SAVI | $\dfrac{(1 + L)\,(\rho_{\mathrm{NIR}} - \rho_{\mathrm{Red}})}{\rho_{\mathrm{NIR}} + \rho_{\mathrm{Red}} + L},\quad L = 0.5$ | B8, B4 | Huete (1988) |
-| GCVI | $\dfrac{\rho_{\mathrm{NIR}}}{\rho_{\mathrm{Green}}} - 1$ | B8, B3 | Gitelson et al. (2003) |
-| NDWI | $\dfrac{\rho_{\mathrm{Green}} - \rho_{\mathrm{NIR}}}{\rho_{\mathrm{Green}} + \rho_{\mathrm{NIR}}}$ | B3, B8 | McFeeters (1996) |
-| NDMI | $\dfrac{\rho_{\mathrm{NIR}} - \rho_{\mathrm{SWIR1}}}{\rho_{\mathrm{NIR}} + \rho_{\mathrm{SWIR1}}}$ | B8, B11 | Gao (1996) |
-| MNDWI | $\dfrac{\rho_{\mathrm{Green}} - \rho_{\mathrm{SWIR1}}}{\rho_{\mathrm{Green}} + \rho_{\mathrm{SWIR1}}}$ | B3, B11 | Xu (2006) |
-| NDBI | $\dfrac{\rho_{\mathrm{SWIR1}} - \rho_{\mathrm{NIR}}}{\rho_{\mathrm{SWIR1}} + \rho_{\mathrm{NIR}}}$ | B11, B8 | Zha et al. (2003) |
-| NBR | $\dfrac{\rho_{\mathrm{NIR}} - \rho_{\mathrm{SWIR2}}}{\rho_{\mathrm{NIR}} + \rho_{\mathrm{SWIR2}}}$ | B8, B12 | Key & Benson (2006) |
-| NDRE | $\dfrac{\rho_{\mathrm{NIR}_{n}} - \rho_{\mathrm{RE1}}}{\rho_{\mathrm{NIR}_{n}} + \rho_{\mathrm{RE1}}}$ | B8A, B5 | Barnes et al. (2000) |
-| MVI | $\dfrac{\rho_{\mathrm{NIR}} - \rho_{\mathrm{Green}}}{\rho_{\mathrm{SWIR1}} - \rho_{\mathrm{Green}}}$ | B8, B3, B11 | Baloloy et al. (2020) |
-| IRECI | $\dfrac{\rho_{\mathrm{RE3}} - \rho_{\mathrm{Red}}}{\rho_{\mathrm{RE1}} / \rho_{\mathrm{RE2}}}$ | B7, B4, B5, B6 | Frampton et al. (2013) |
-| ATBI | $\dfrac{\rho_{\mathrm{NIR}} - \rho_{\mathrm{SWIR2}}}{\rho_{\mathrm{NIR}} + \rho_{\mathrm{SWIR2}}}\cdot\dfrac{\rho_{\mathrm{SWIR2}}}{\rho_{\mathrm{NIR}}}$ | B8, B12 | Bilal (2025) |
-| AMMI | $\dfrac{\rho_{\mathrm{NIR}} - \rho_{\mathrm{Red}}}{\rho_{\mathrm{Red}} + \rho_{\mathrm{SWIR1}}}\cdot\dfrac{\rho_{\mathrm{NIR}} - \rho_{\mathrm{SWIR1}}}{\rho_{\mathrm{SWIR1}} - 0.65\,\rho_{\mathrm{Red}}}$ | B8, B4, B11 | Suyarso & Avianto (2022) |
+| NDVI | $`\dfrac{\rho_{\mathrm{NIR}} - \rho_{\mathrm{Red}}}{\rho_{\mathrm{NIR}} + \rho_{\mathrm{Red}}}`$ | B8, B4 | Rouse et al. (1974) |
+| EVI2 | $`2.5\,\dfrac{\rho_{\mathrm{NIR}} - \rho_{\mathrm{Red}}}{\rho_{\mathrm{NIR}} + 2.4\,\rho_{\mathrm{Red}} + 1}`$ | B8, B4 | Jiang et al. (2008) |
+| SAVI | $`\dfrac{(1 + L)\,(\rho_{\mathrm{NIR}} - \rho_{\mathrm{Red}})}{\rho_{\mathrm{NIR}} + \rho_{\mathrm{Red}} + L},\quad L = 0.5`$ | B8, B4 | Huete (1988) |
+| GCVI | $`\dfrac{\rho_{\mathrm{NIR}}}{\rho_{\mathrm{Green}}} - 1`$ | B8, B3 | Gitelson et al. (2003) |
+| NDWI | $`\dfrac{\rho_{\mathrm{Green}} - \rho_{\mathrm{NIR}}}{\rho_{\mathrm{Green}} + \rho_{\mathrm{NIR}}}`$ | B3, B8 | McFeeters (1996) |
+| NDMI | $`\dfrac{\rho_{\mathrm{NIR}} - \rho_{\mathrm{SWIR1}}}{\rho_{\mathrm{NIR}} + \rho_{\mathrm{SWIR1}}}`$ | B8, B11 | Gao (1996) |
+| MNDWI | $`\dfrac{\rho_{\mathrm{Green}} - \rho_{\mathrm{SWIR1}}}{\rho_{\mathrm{Green}} + \rho_{\mathrm{SWIR1}}}`$ | B3, B11 | Xu (2006) |
+| NDBI | $`\dfrac{\rho_{\mathrm{SWIR1}} - \rho_{\mathrm{NIR}}}{\rho_{\mathrm{SWIR1}} + \rho_{\mathrm{NIR}}}`$ | B11, B8 | Zha et al. (2003) |
+| NBR | $`\dfrac{\rho_{\mathrm{NIR}} - \rho_{\mathrm{SWIR2}}}{\rho_{\mathrm{NIR}} + \rho_{\mathrm{SWIR2}}}`$ | B8, B12 | Key & Benson (2006) |
+| NDRE | $`\dfrac{\rho_{\mathrm{NIR}_{n}} - \rho_{\mathrm{RE1}}}{\rho_{\mathrm{NIR}_{n}} + \rho_{\mathrm{RE1}}}`$ | B8A, B5 | Barnes et al. (2000) |
+| MVI | $`\dfrac{\rho_{\mathrm{NIR}} - \rho_{\mathrm{Green}}}{\rho_{\mathrm{SWIR1}} - \rho_{\mathrm{Green}}}`$ | B8, B3, B11 | Baloloy et al. (2020) |
+| IRECI | $`\dfrac{\rho_{\mathrm{RE3}} - \rho_{\mathrm{Red}}}{\rho_{\mathrm{RE1}} / \rho_{\mathrm{RE2}}}`$ | B7, B4, B5, B6 | Frampton et al. (2013) |
+| ATBI | $`\dfrac{\rho_{\mathrm{NIR}} - \rho_{\mathrm{SWIR2}}}{\rho_{\mathrm{NIR}} + \rho_{\mathrm{SWIR2}}}\cdot\dfrac{\rho_{\mathrm{SWIR2}}}{\rho_{\mathrm{NIR}}}`$ | B8, B12 | Bilal (2025) |
+| AMMI | $`\dfrac{\rho_{\mathrm{NIR}} - \rho_{\mathrm{Red}}}{\rho_{\mathrm{Red}} + \rho_{\mathrm{SWIR1}}}\cdot\dfrac{\rho_{\mathrm{NIR}} - \rho_{\mathrm{SWIR1}}}{\rho_{\mathrm{SWIR1}} - 0.65\,\rho_{\mathrm{Red}}}`$ | B8, B4, B11 | Suyarso & Avianto (2022) |
 
 Your own expressions may use `B2 … B12`, `B8A`, numbers, `+ - * /` and parentheses, for example `(B8 - B4) / (B8 + B4 + 0.5) * 1.5`.
 
