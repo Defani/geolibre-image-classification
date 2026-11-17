@@ -314,7 +314,7 @@ Majority filter: each pixel takes the most frequent class in its 3 × 3 or 5 × 
 
 ## Spectral indices
 
-Formulas use reflectance (0–1) with Sentinel-2 band names; other sensors are mapped through band roles. The index list and formulas follow GEEDEF Land Cover Classification Tools.
+Formulas use reflectance (0–1) with Sentinel-2 band names; other sensors are mapped through band roles.
 
 | Index | Formula | Source |
 |---|---|---|
@@ -322,19 +322,16 @@ Formulas use reflectance (0–1) with Sentinel-2 band names; other sensors are m
 | EVI2 | $2.5\,(B8-B4)/(B8+2.4\,B4+1)$ | Jiang et al. (2008) |
 | SAVI | $1.5\,(B8-B4)/(B8+B4+0.5)$ | Huete (1988) |
 | GCVI | $B8/B3 - 1$ | Gitelson et al. (2003) |
-| NDWI | $(B8-B11)/(B8+B11)$ | Gao (1996) |
+| NDWI | $(B3-B8)/(B3+B8)$ | McFeeters (1996) |
 | NDMI | $(B8-B11)/(B8+B11)$ | Gao (1996) |
 | MNDWI | $(B3-B11)/(B3+B11)$ | Xu (2006) |
 | NDBI | $(B11-B8)/(B11+B8)$ | Zha et al. (2003) |
 | NBR | $(B8-B12)/(B8+B12)$ | Key & Benson (2006) |
 | NDRE | $(B8A-B5)/(B8A+B5)$ | Barnes et al. (2000) |
-| IRECI | $(B7-B4)/(B5/B6)$ | Frampton et al. (2013) |
-| PRI | $(B2-B3)/(B2+B3)$ | Gamon et al. (1992), broad-band version |
-| CAI | $B12/B11$ | GEEDEF |
-| HALL_COVER | $-0.017\,B4 - 0.007\,B8 - 0.079\,B12 + 5.22$ | GEEDEF |
 | MVI | $(B8-B3)/(B11-B3)$ | Baloloy et al. (2020) |
-| GVS | $100\,\text{NDVI} / (100\,\lvert\text{NDVI}\rvert + 100\,\lvert\text{NBR}\rvert + 1)$ | GEEDEF |
-| NDFI | $(\text{GVS}-\text{NPV})/(\text{GVS}+\text{NPV})$, $\text{NPV} = 1-\text{NDVI}$ | GEEDEF, after the idea of Souza et al. (2005) |
+| ATBI | $\dfrac{B8-B12}{B8+B12}\cdot\dfrac{B12}{B8}$ | Bilal (2025) |
+| AMMI | $\dfrac{B8-B4}{B4+B11}\cdot\dfrac{B8-B11}{B11-0.65\,B4}$ | Suyarso & Avianto (2022) |
+| IRECI | $(B7-B4)/(B5/B6)$ | Frampton et al. (2013) |
 
 Your own expressions may use `B2 … B12`, `B8A`, numbers, `+ - * /` and parentheses, for example `(B8 - B4) / (B8 + B4 + 0.5) * 1.5`.
 
@@ -380,6 +377,7 @@ Code layout:
 - Ball, G. H., & Hall, D. J. (1965). *ISODATA, a novel method of data analysis and pattern classification*. Stanford Research Institute, Menlo Park, CA.
 - Baloloy, A. B., Blanco, A. C., Sta. Ana, R. R. C., & Nadaoka, K. (2020). Development and application of a new mangrove vegetation index (MVI) for rapid and accurate mangrove mapping. *ISPRS Journal of Photogrammetry and Remote Sensing, 166*, 95–117. https://doi.org/10.1016/j.isprsjprs.2020.06.001
 - Barnes, E. M., Clarke, T. R., Richards, S. E., Colaizzi, P. D., Haberland, J., Kostrzewski, M., … Moran, M. S. (2000). Coincident detection of crop water stress, nitrogen status and canopy density using ground based multispectral data. *Proceedings of the 5th International Conference on Precision Agriculture*, Bloomington, MN.
+- Bilal, M. (2025). The automated temporal burn index (ATBI) for accurate and scalable burned area mapping. *International Journal of Applied Earth Observation and Geoinformation, 144*, 104866. https://doi.org/10.1016/j.jag.2025.104866
 - Breiman, L. (2001). Random forests. *Machine Learning, 45*(1), 5–32. https://doi.org/10.1023/A:1010933404324
 - Cohen, J. (1960). A coefficient of agreement for nominal scales. *Educational and Psychological Measurement, 20*(1), 37–46. https://doi.org/10.1177/001316446002000104
 - Congalton, R. G. (1991). A review of assessing the accuracy of classifications of remotely sensed data. *Remote Sensing of Environment, 37*(1), 35–46. https://doi.org/10.1016/0034-4257(91)90048-B
@@ -387,24 +385,25 @@ Code layout:
 - Cortes, C., & Vapnik, V. (1995). Support-vector networks. *Machine Learning, 20*(3), 273–297. https://doi.org/10.1007/BF00994018
 - Frampton, W. J., Dash, J., Watmough, G., & Milton, E. J. (2013). Evaluating the capabilities of Sentinel-2 for quantitative estimation of biophysical variables in vegetation. *ISPRS Journal of Photogrammetry and Remote Sensing, 82*, 83–92. https://doi.org/10.1016/j.isprsjprs.2013.04.007
 - Friedman, J. H. (2001). Greedy function approximation: A gradient boosting machine. *The Annals of Statistics, 29*(5), 1189–1232. https://doi.org/10.1214/aos/1013203451
-- Gamon, J. A., Peñuelas, J., & Field, C. B. (1992). A narrow-waveband spectral index that tracks diurnal changes in photosynthetic efficiency. *Remote Sensing of Environment, 41*(1), 35–44. https://doi.org/10.1016/0034-4257(92)90059-S
 - Gao, B.-C. (1996). NDWI—A normalized difference water index for remote sensing of vegetation liquid water from space. *Remote Sensing of Environment, 58*(3), 257–266. https://doi.org/10.1016/S0034-4257(96)00067-3
 - Gitelson, A. A., Viña, A., Arkebauer, T. J., Rundquist, D. C., Keydan, G., & Leavitt, B. (2003). Remote estimation of leaf area index and green leaf biomass in maize canopies. *Geophysical Research Letters, 30*(5), 1248. https://doi.org/10.1029/2002GL016450
 - Huete, A. R. (1988). A soil-adjusted vegetation index (SAVI). *Remote Sensing of Environment, 25*(3), 295–309. https://doi.org/10.1016/0034-4257(88)90106-X
 - Jiang, Z., Huete, A. R., Didan, K., & Miura, T. (2008). Development of a two-band enhanced vegetation index without a blue band. *Remote Sensing of Environment, 112*(10), 3833–3845. https://doi.org/10.1016/j.rse.2008.06.006
 - Keerthi, S. S., Shevade, S. K., Bhattacharyya, C., & Murthy, K. R. K. (2001). Improvements to Platt's SMO algorithm for SVM classifier design. *Neural Computation, 13*(3), 637–649. https://doi.org/10.1162/089976601300014493
 - Key, C. H., & Benson, N. C. (2006). Landscape assessment (LA): Sampling and analysis methods. In D. C. Lutes et al. (Eds.), *FIREMON: Fire effects monitoring and inventory system* (Gen. Tech. Rep. RMRS-GTR-164-CD). USDA Forest Service, Rocky Mountain Research Station.
+- McFeeters, S. K. (1996). The use of the Normalized Difference Water Index (NDWI) in the delineation of open water features. *International Journal of Remote Sensing, 17*(7), 1425–1432. https://doi.org/10.1080/01431169608948714
 - Lloyd, S. P. (1982). Least squares quantization in PCM. *IEEE Transactions on Information Theory, 28*(2), 129–137. https://doi.org/10.1109/TIT.1982.1056489
 - Olofsson, P., Foody, G. M., Herold, M., Stehman, S. V., Woodcock, C. E., & Wulder, M. A. (2014). Good practices for estimating area and assessing accuracy of land change. *Remote Sensing of Environment, 148*, 42–57. https://doi.org/10.1016/j.rse.2014.02.015
 - Pedregosa, F., Varoquaux, G., Gramfort, A., Michel, V., Thirion, B., Grisel, O., … Duchesnay, É. (2011). Scikit-learn: Machine learning in Python. *Journal of Machine Learning Research, 12*, 2825–2830.
 - Rouse, J. W., Haas, R. H., Schell, J. A., & Deering, D. W. (1974). Monitoring vegetation systems in the Great Plains with ERTS. *Third Earth Resources Technology Satellite-1 Symposium* (NASA SP-351), 309–317.
-- Souza, C. M., Roberts, D. A., & Cochrane, M. A. (2005). Combining spectral and spatial information to map canopy damage from selective logging and forest fires. *Remote Sensing of Environment, 98*(2–3), 329–343. https://doi.org/10.1016/j.rse.2005.07.013
+- Suyarso, & Avianto, P. (2022). AMMI Automatic Mangrove Map and Index: Novelty for efficiently monitoring mangrove changes with the case study in Musi Delta, South Sumatra, Indonesia. *International Journal of Forestry Research, 2022*, 8103242. https://doi.org/10.1155/2022/8103242
 - Xu, H. (2006). Modification of normalised difference water index (NDWI) to enhance open water features in remotely sensed imagery. *International Journal of Remote Sensing, 27*(14), 3025–3033. https://doi.org/10.1080/01431160600589179
 - Zha, Y., Gao, J., & Ni, S. (2003). Use of normalized difference built-up index in automatically mapping urban areas from TM imagery. *International Journal of Remote Sensing, 24*(3), 583–594. https://doi.org/10.1080/01431160304987
 
 Tools and inspiration:
 
-- GEEDEF Land Cover Classification Tools (Google Earth Engine), source of the default parameters and index formulas: https://github.com/Defani/GEEDEF-Land-Cover-Classification-Tools
+- ATBI burned-area mapping in Google Earth Engine: https://github.com/Defani/Kebakaran-Hutan--ATBI---GEE
+- AMMI mangrove mapping in Python: https://github.com/Defani/AMMI-MANGROVE-MAPPING-USING-PYTHON
 - Semi-Automatic Classification Plugin (QGIS), area-based accuracy and balanced weights: https://github.com/semiautomaticgit/SemiAutomaticClassificationPlugin
 - Example data, 2023 Mount Lawu fire: https://github.com/Defani/NBR-Karhutla-Gunung-Lawu-GEE
 
