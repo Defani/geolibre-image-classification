@@ -314,24 +314,24 @@ Filter mayoritas: setiap piksel mengambil kelas yang paling sering muncul di jen
 
 ## Indeks spektral
 
-Rumus memakai reflektans (0–1) dengan nama band Sentinel-2; sensor lain dipetakan lewat peran band.
+$\rho$ adalah reflektans permukaan (0–1) pada band yang disebut: Blue, Green, Red, RE1–RE3 (red edge), NIR, $\mathrm{NIR}_{n}$ (NIR sempit), SWIR1, SWIR2. Band Sentinel-2 dicantumkan; sensor lain dipetakan ke peran yang sama (lihat [Sensor yang didukung](#sensor-yang-didukung)).
 
-| Indeks | Rumus | Sumber |
-|---|---|---|
-| NDVI | $(B8-B4)/(B8+B4)$ | Rouse dkk. (1974) |
-| EVI2 | $\text{2,5}\,(B8-B4)/(B8+\text{2,4}\,B4+1)$ | Jiang dkk. (2008) |
-| SAVI | $\text{1,5}\,(B8-B4)/(B8+B4+\text{0,5})$ | Huete (1988) |
-| GCVI | $B8/B3 - 1$ | Gitelson dkk. (2003) |
-| NDWI | $(B3-B8)/(B3+B8)$ | McFeeters (1996) |
-| NDMI | $(B8-B11)/(B8+B11)$ | Gao (1996) |
-| MNDWI | $(B3-B11)/(B3+B11)$ | Xu (2006) |
-| NDBI | $(B11-B8)/(B11+B8)$ | Zha dkk. (2003) |
-| NBR | $(B8-B12)/(B8+B12)$ | Key & Benson (2006) |
-| NDRE | $(B8A-B5)/(B8A+B5)$ | Barnes dkk. (2000) |
-| MVI | $(B8-B3)/(B11-B3)$ | Baloloy dkk. (2020) |
-| ATBI | $\dfrac{B8-B12}{B8+B12}\cdot\dfrac{B12}{B8}$ | Bilal (2025) |
-| AMMI | $\dfrac{B8-B4}{B4+B11}\cdot\dfrac{B8-B11}{B11-\text{0,65}\,B4}$ | Suyarso & Avianto (2022) |
-| IRECI | $(B7-B4)/(B5/B6)$ | Frampton dkk. (2013) |
+| Indeks | Rumus | Band Sentinel-2 | Sumber |
+|---|---|---|---|
+| NDVI | $\dfrac{\rho_{\mathrm{NIR}} - \rho_{\mathrm{Red}}}{\rho_{\mathrm{NIR}} + \rho_{\mathrm{Red}}}$ | B8, B4 | Rouse dkk. (1974) |
+| EVI2 | $\text{2,5}\,\dfrac{\rho_{\mathrm{NIR}} - \rho_{\mathrm{Red}}}{\rho_{\mathrm{NIR}} + \text{2,4}\,\rho_{\mathrm{Red}} + 1}$ | B8, B4 | Jiang dkk. (2008) |
+| SAVI | $\dfrac{(1 + L)\,(\rho_{\mathrm{NIR}} - \rho_{\mathrm{Red}})}{\rho_{\mathrm{NIR}} + \rho_{\mathrm{Red}} + L},\quad L = \text{0,5}$ | B8, B4 | Huete (1988) |
+| GCVI | $\dfrac{\rho_{\mathrm{NIR}}}{\rho_{\mathrm{Green}}} - 1$ | B8, B3 | Gitelson dkk. (2003) |
+| NDWI | $\dfrac{\rho_{\mathrm{Green}} - \rho_{\mathrm{NIR}}}{\rho_{\mathrm{Green}} + \rho_{\mathrm{NIR}}}$ | B3, B8 | McFeeters (1996) |
+| NDMI | $\dfrac{\rho_{\mathrm{NIR}} - \rho_{\mathrm{SWIR1}}}{\rho_{\mathrm{NIR}} + \rho_{\mathrm{SWIR1}}}$ | B8, B11 | Gao (1996) |
+| MNDWI | $\dfrac{\rho_{\mathrm{Green}} - \rho_{\mathrm{SWIR1}}}{\rho_{\mathrm{Green}} + \rho_{\mathrm{SWIR1}}}$ | B3, B11 | Xu (2006) |
+| NDBI | $\dfrac{\rho_{\mathrm{SWIR1}} - \rho_{\mathrm{NIR}}}{\rho_{\mathrm{SWIR1}} + \rho_{\mathrm{NIR}}}$ | B11, B8 | Zha dkk. (2003) |
+| NBR | $\dfrac{\rho_{\mathrm{NIR}} - \rho_{\mathrm{SWIR2}}}{\rho_{\mathrm{NIR}} + \rho_{\mathrm{SWIR2}}}$ | B8, B12 | Key & Benson (2006) |
+| NDRE | $\dfrac{\rho_{\mathrm{NIR}_{n}} - \rho_{\mathrm{RE1}}}{\rho_{\mathrm{NIR}_{n}} + \rho_{\mathrm{RE1}}}$ | B8A, B5 | Barnes dkk. (2000) |
+| MVI | $\dfrac{\rho_{\mathrm{NIR}} - \rho_{\mathrm{Green}}}{\rho_{\mathrm{SWIR1}} - \rho_{\mathrm{Green}}}$ | B8, B3, B11 | Baloloy dkk. (2020) |
+| IRECI | $\dfrac{\rho_{\mathrm{RE3}} - \rho_{\mathrm{Red}}}{\rho_{\mathrm{RE1}} / \rho_{\mathrm{RE2}}}$ | B7, B4, B5, B6 | Frampton dkk. (2013) |
+| ATBI | $\dfrac{\rho_{\mathrm{NIR}} - \rho_{\mathrm{SWIR2}}}{\rho_{\mathrm{NIR}} + \rho_{\mathrm{SWIR2}}}\cdot\dfrac{\rho_{\mathrm{SWIR2}}}{\rho_{\mathrm{NIR}}}$ | B8, B12 | Bilal (2025) |
+| AMMI | $\dfrac{\rho_{\mathrm{NIR}} - \rho_{\mathrm{Red}}}{\rho_{\mathrm{Red}} + \rho_{\mathrm{SWIR1}}}\cdot\dfrac{\rho_{\mathrm{NIR}} - \rho_{\mathrm{SWIR1}}}{\rho_{\mathrm{SWIR1}} - \text{0,65}\,\rho_{\mathrm{Red}}}$ | B8, B4, B11 | Suyarso & Avianto (2022) |
 
 Ekspresi sendiri boleh memakai `B2 … B12`, `B8A`, angka, `+ - * /`, dan kurung, misalnya `(B8 - B4) / (B8 + B4 + 0.5) * 1.5`.
 
