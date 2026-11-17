@@ -1,198 +1,200 @@
-# Image Classification untuk GeoLibre
+# Image Classification for GeoLibre
 
-Plugin [GeoLibre](https://geolibre.app) untuk klasifikasi tutupan lahan dari citra satelit, langsung di peramban atau GeoLibre Desktop. Isinya klasifikasi terbimbing (Random Forest, Gradient Tree Boost, SVM), klasifikasi tak terbimbing (K-means, ISODATA), uji akurasi (termasuk akurasi berbasis luas Olofsson dkk. 2014), dan analisis perubahan lahan antara dua tanggal. Semua dihitung di komputer sendiri; tidak ada data yang dikirim ke server.
+**English** · [Bahasa Indonesia](README.id.md)
 
-![Hasil klasifikasi Random Forest, citra Sentinel-2 sesudah kebakaran Gunung Lawu 2023](docs/img/readme/03-result-map.png)
+A [GeoLibre](https://geolibre.app) plugin for land cover classification of satellite imagery, in the browser or in GeoLibre Desktop. It covers supervised classification (Random Forest, Gradient Tree Boost, SVM), unsupervised classification (K-means, ISODATA), accuracy assessment (including the area-based estimator of Olofsson et al. 2014), and land cover change between two dates. Everything runs on your own computer; no data is sent to a server.
 
-*Citra contoh: Sentinel-2 sebelum dan sesudah kebakaran Gunung Lawu 2023, komposit Burn scar (B11 B8 B3). Ungu = area terbakar.*
+![Random Forest result on a Sentinel-2 image after the 2023 Mount Lawu fire](docs/img/readme/03-result-map.png)
 
-## Daftar isi
+*Example data: Sentinel-2 before and after the 2023 fire on Mount Lawu (Java, Indonesia), Burn scar composite (B11 B8 B3). Purple = burned.*
 
-- [Fitur](#fitur)
-- [Instalasi](#instalasi)
+## Contents
+
+- [Features](#features)
+- [Installation](#installation)
 - [Tutorial](#tutorial)
-- [Metode dan rumus](#metode-dan-rumus)
-- [Indeks spektral](#indeks-spektral)
-- [Sensor yang didukung](#sensor-yang-didukung)
-- [Build dan pengujian](#build-dan-pengujian)
-- [Daftar pustaka](#daftar-pustaka)
-- [Lisensi](#lisensi)
+- [Methods and formulas](#methods-and-formulas)
+- [Spectral indices](#spectral-indices)
+- [Supported sensors](#supported-sensors)
+- [Build and tests](#build-and-tests)
+- [References](#references)
+- [License](#license)
 
-## Fitur
+## Features
 
-| Bagian | Isi |
+| Part | What it does |
 |---|---|
-| Window | Jendela penuh di atas GeoLibre: title bar, menu (File, Edit, View, Layers, Samples, Classify, Results, Analysis, Help), toolbar, dock kiri (citra, hasil, legenda), dock kanan (alur kerja), status bar |
-| Tab tengah | **Map · Split view · Charts · Accuracy · Change · Log** |
-| Citra | Tambah folder atau file GeoTIFF. Band dikelompokkan per scene (`PreFire_Band_B2`, `PreFire_Band_B3` … → set `PreFire_Band`) |
-| Tampilan | Komposit RGB (preset True colour, False colour, Burn scar, SWIR, Agriculture, atau bebas), band tunggal, indeks, ekspresi sendiri. Nama band bisa nomor (B11 B8 B3) atau nama (SWIR1 NIR Green) |
-| Sampel | Titik, poligon, lingkaran, persegi (tarik atau dua klik). Geser citra hanya dengan ikon tangan. Impor dari layer vektor, simpan sebagai layer |
-| Terbimbing | Random Forest, Gradient Tree Boost, SVM (RBF, linear, polinomial, sigmoid), opsi *Balance classes* |
-| Tak terbimbing | K-means (inisialisasi k-means++), ISODATA (pecah, gabung, buang klaster), lalu labeli klaster menjadi kelas |
-| Akurasi | Confusion matrix, OA, kappa, PA, UA, F1, OOB (RF), akurasi berbasis luas dengan galat baku |
-| Grafik | Kartu putih (juga di mode gelap): confusion matrix gaya matplotlib, luas kelas, pentingnya variabel, spectral profile gaya jurnal, heatmap korelasi gaya seaborn |
-| Perubahan lahan | Terapkan model ke citra tanggal lain, lalu change matrix (ha), diagram Sankey, gains/losses |
-| Pasca-proses | Smoothing majority 3×3 / 5×5, konversi ke poligon (dissolve per kelas) |
-| Ekspor | Langsung ke folder di komputer: GeoTIFF berpalet, GeoJSON, XLSX, CSV, grafik PNG 300 dpi dan SVG |
+| Window | Full window over GeoLibre: title bar, menus (File, Edit, View, Layers, Samples, Classify, Results, Analysis, Help), toolbar, left dock (images, results, legend), right dock (workflow), status bar |
+| Centre tabs | **Map · Split view · Charts · Accuracy · Change · Log** |
+| Images | Add a folder or GeoTIFF files. Bands are grouped per scene (`PreFire_Band_B2`, `PreFire_Band_B3` … → set `PreFire_Band`) |
+| Display | RGB composite (True colour, False colour, Burn scar, SWIR, Agriculture presets, or any bands), single band, index, your own expression. Band labels by number (B11 B8 B3) or name (SWIR1 NIR Green) |
+| Samples | Point, polygon, circle, rectangle (drag or two clicks). The image pans only with the hand tool. Import from a vector layer, save as a layer |
+| Supervised | Random Forest, Gradient Tree Boost, SVM (RBF, linear, polynomial, sigmoid), optional *Balance classes* |
+| Unsupervised | K-means (k-means++ seeding), ISODATA (split, merge, drop clusters), then label clusters as classes |
+| Accuracy | Confusion matrix, OA, kappa, PA, UA, F1, OOB (RF), area-based accuracy with standard errors |
+| Charts | White cards (also in dark mode): matplotlib-style confusion matrix, class areas, variable importance, journal-style spectral profile, seaborn-style correlation heatmap |
+| Land cover change | Apply the model to an image from another date, then change matrix (ha), Sankey diagram, gains and losses |
+| Post-processing | Majority smoothing 3×3 / 5×5, conversion to polygons (dissolved per class) |
+| Export | Straight to a folder on your computer: paletted GeoTIFF, GeoJSON, XLSX, CSV, charts as 300 dpi PNG and SVG |
 
-## Instalasi
+## Installation
 
 **GeoLibre Desktop**
 
-1. Build `image-classification-<versi>.zip` (lihat [Build](#build-dan-pengujian)), atau unduh dari [Releases](https://github.com/Defani/geolibre-image-classification/releases) bila versi itu sudah dirilis.
+1. Build `image-classification-<version>.zip` (see [Build](#build-and-tests)), or download it from [Releases](https://github.com/Defani/geolibre-image-classification/releases) once that version is released.
 2. **Settings → Manage plugins → Settings → Install from file → Choose .zip…**
-3. **Plugins → Installed → Image Classification**, lalu buka lewat menu **Image Classification** di bilah atas.
+3. **Plugins → Installed → Image Classification**, then open it from the **Image Classification** menu in the top bar.
 
 **GeoLibre Web (https://web.geolibre.app)**
 
-Cara yang sama dengan *Choose .zip…*; plugin disimpan di peramban. Untuk pengembangan, tambahkan URL manifest (misalnya `http://localhost:8098/plugin/plugin.json`) di **Manifest URLs**.
+Same steps with *Choose .zip…*; the plugin is stored in the browser. For development, add a manifest URL (for example `http://localhost:8098/plugin/plugin.json`) under **Manifest URLs**.
 
 ## Tutorial
 
-Contoh di bawah memakai citra Sentinel-2 Gunung Lawu 2023: tujuh band sebelum kebakaran (`PreFire_Band_B2 … B12`) dan enam band sesudahnya (`PostFire_Band_*`).
+The examples use Sentinel-2 imagery of Mount Lawu, 2023: seven bands before the fire (`PreFire_Band_B2 … B12`) and six after it (`PostFire_Band_*`).
 
-### 1. Muat citra
+### 1. Load the imagery
 
-**File → Add folder of GeoTIFFs…** (atau *Add files…*). Plugin membaca setiap file pada resolusi aslinya dan menebak peran band dari namanya (`…_B8A.tif` → B8A). Band yang namanya sama kecuali nomor band dijadikan satu *image set*, tampil di dock kiri **Images**. Klik salah satu set untuk menjadikannya citra aktif.
+**File → Add folder of GeoTIFFs…** (or *Add files…*). The plugin reads each file at its native resolution and guesses the band role from the name (`…_B8A.tif` → B8A). Bands whose names differ only in the band number form one *image set*, listed in the left dock under **Images**. Click a set to make it the active image.
 
-Di dock kanan **1 Layers**:
+In the right dock, **1 Layers**:
 
-- **Sensor**: pilih sensornya agar nomor band dipetakan dengan benar (Landsat 8 B5 = NIR, dst.).
-- **Indices**: klik indeks yang ingin dipakai sebagai input tambahan, atau tulis ekspresi sendiri, misalnya `(B8 - B12) / (B8 + B12)`.
-- **Grid**: layer acuan dan ukuran sel. Band beresolusi lain di-resample (nearest) ke grid ini.
-- **RGB composite**: pilih preset. Untuk area terbakar pakai **Burn scar (B11 B8 B3)**.
+- **Sensor**: pick the sensor so band numbers map correctly (Landsat 8 B5 = NIR, and so on).
+- **Indices**: click the indices to use as extra inputs, or write your own expression, for example `(B8 - B12) / (B8 + B12)`.
+- **Grid**: reference layer and cell size. Bands at other resolutions are resampled (nearest) onto this grid.
+- **RGB composite**: pick a preset. For burned areas use **Burn scar (B11 B8 B3)**.
 
-### 2. Buat kelas dan sampel
+### 2. Create classes and samples
 
-Di **2 Samples**, isi nama kelas lalu **Add class**. Kode kelas otomatis 1, 2, 3 … (0 = NoData). Skema warna KLHK, MapBiomas, atau NLCD bisa dipakai lewat **Scheme**.
+In **2 Samples**, type a class name and press **Add class**. Class codes are assigned automatically: 1, 2, 3 … (0 = NoData). KLHK, MapBiomas or NLCD colour schemes are available under **Scheme**.
 
-Pilih alat gambar di toolbar atau di **Draw samples**:
+Pick a drawing tool on the toolbar or under **Draw samples**:
 
-| Alat | Cara |
+| Tool | How |
 |---|---|
-| Point | klik satu piksel |
-| Polygon | klik titik-titik sudut, klik titik pertama atau klik ganda untuk menutup |
-| Circle | tarik dari pusat, atau klik pusat lalu klik tepi |
-| Rectangle | tarik dari satu sudut ke sudut seberang, atau klik dua sudut |
+| Point | click one pixel |
+| Polygon | click the vertices; click the first vertex or double-click to close |
+| Circle | drag from the centre, or click the centre and then the edge |
+| Rectangle | drag from one corner to the opposite one, or click two corners |
 
-Saat alat gambar aktif, citra tidak ikut bergeser; pakai ikon tangan untuk menggeser dan roda tetikus untuk zoom. Spectral profile di bagian bawah dock diperbarui setiap kali sampel ditambah.
+While a drawing tool is on, the image does not move; use the hand tool to pan and the mouse wheel to zoom. The spectral profile at the bottom of the dock updates with every new sample.
 
-![Menggambar sampel dengan Rectangle](docs/img/readme/02-samples.png)
+![Drawing samples with the Rectangle tool](docs/img/readme/02-samples.png)
 
-Tips sampel: gambar beberapa kotak kecil yang tersebar untuk setiap kelas, bukan satu kotak besar; ambil dari piksel yang jelas homogen.
+Tip: draw several small, spread-out boxes per class rather than one large box, over clearly homogeneous pixels.
 
-### 3. Pilih model
+### 3. Choose a model
 
 **3 Model → Supervised**:
 
-| Parameter | Default | Keterangan |
+| Parameter | Default | Note |
 |---|---|---|
-| Algoritme | Random Forest | RF, GTB, atau SVM |
-| RF | 500 pohon, min leaf 1, bag 0,5, √d variabel per split | |
-| GTB | 200 pohon, shrinkage 0,05, sampling 0,7, 5 node | |
-| SVM | RBF, C = 10, γ = 0,5 | γ dibagi jumlah input setelah standardisasi |
-| Split | 70 % latih / 30 % uji, per piksel atau per sampel | per sampel lebih jujur bila sampel berdekatan |
-| Max pixels per sample | 500 | membatasi dominasi poligon besar |
-| Balance classes | mati | bobot kelas berbanding terbalik dengan frekuensinya |
-| Seed | 42 | hasil bisa diulang |
+| Algorithm | Random Forest | RF, GTB or SVM |
+| RF | 500 trees, min leaf 1, bag 0.5, √d variables per split | |
+| GTB | 200 trees, shrinkage 0.05, sampling 0.7, 5 nodes | |
+| SVM | RBF, C = 10, γ = 0.5 | γ is divided by the number of inputs after standardising |
+| Split | 70 % training / 30 % testing, by pixel or by sample | by sample is more honest when samples are close together |
+| Max pixels per sample | 500 | keeps large polygons from dominating |
+| Balance classes | off | class weights inversely proportional to class frequency |
+| Seed | 42 | runs are repeatable |
 
-Klik **Run classification**. Hasilnya muncul di peta, di dock kiri **Results**, dan di **4 Results**: OA, kappa, luas per kelas, jumlah patch.
+Press **Run classification**. The result appears on the map, in the left dock under **Results**, and in **4 Results**: OA, kappa, area per class, number of patches.
 
-### 4. Periksa akurasi dan grafik
+### 4. Check accuracy and charts
 
-Tab **Accuracy**: OA, kappa, OOB, akurasi berbasis luas ±95 % CI, dan confusion matrix lengkap dengan PA/UA.
+**Accuracy** tab: OA, kappa, OOB, area-based accuracy with 95 % CI, and the full confusion matrix with PA/UA.
 
-![Tab Accuracy](docs/img/readme/07-accuracy.png)
+![Accuracy tab](docs/img/readme/07-accuracy.png)
 
-Tab **Charts**: setiap kartu punya tombol Grafik/Tabel, unduh (CSV, XLSX, PNG 300 dpi, SVG), dan layar penuh.
+**Charts** tab: every card has a Chart/Table switch, downloads (CSV, XLSX, 300 dpi PNG, SVG) and full screen.
 
-![Tab Charts](docs/img/readme/04-charts.png)
+![Charts tab](docs/img/readme/04-charts.png)
 
 ![Spectral profile](docs/img/readme/05-spectral-profile.png)
 
-![Heatmap korelasi input](docs/img/readme/06-correlation.png)
+![Input correlation heatmap](docs/img/readme/06-correlation.png)
 
-### 5. Smoothing dan poligon
+### 5. Smoothing and polygons
 
-Di **4 Results → Smoothing** pilih Majority 3 × 3 atau 5 × 5 (luas dan grafik ikut diperbarui; akurasi tetap dari model). **Convert to polygons** menambahkan layer GeoLibre berisi satu MultiPolygon per kelas dengan kolom `class_code`, `class_name`, `area_ha`, `patches`, `color`.
+In **4 Results → Smoothing** choose Majority 3 × 3 or 5 × 5 (areas and charts update; accuracy stays that of the model). **Convert to polygons** adds a GeoLibre layer with one MultiPolygon per class and the fields `class_code`, `class_name`, `area_ha`, `patches`, `color`.
 
-### 6. Before/after dan perubahan lahan
+### 6. Before/after and land cover change
 
-1. Di **4 Results → Classify another image**, pilih set lain (misalnya `PreFire_Band`) lalu **Classify**. Model yang sama diterapkan; band dicocokkan menurut perannya.
-2. Tab **Split view** menampilkan dua citra atau hasil dengan swipe atau berdampingan.
+1. In **4 Results → Classify another image**, pick another set (for example `PreFire_Band`) and press **Classify**. The same model is applied; bands are matched by role.
+2. The **Split view** tab shows two images or results with a swipe or side by side.
 
-![Split view sebelum dan sesudah kebakaran](docs/img/readme/09-split-view.png)
+![Split view before and after the fire](docs/img/readme/09-split-view.png)
 
-3. Tab **Change**: pilih hasil awal (*From*) dan akhir (*To*); tombol ⇄ menukar keduanya. Isinya ringkasan luas tak berubah/berubah, change matrix, diagram Sankey, serta gains and losses per kelas.
+3. **Change** tab: choose the earlier result (*From*) and the later one (*To*); the ⇄ button swaps them. It shows unchanged/changed area, the change matrix, a Sankey diagram, and gains and losses per class.
 
-![Analisis perubahan lahan](docs/img/readme/08-change.png)
+![Land cover change](docs/img/readme/08-change.png)
 
-![Change matrix, Sankey, dan gains/losses](docs/img/readme/08b-change-gains.png)
+![Change matrix, Sankey, gains and losses](docs/img/readme/08b-change-gains.png)
 
-Pada data contoh, sekitar 1.295 ha hutan sebelum kebakaran menjadi area terbakar; area terbakar bertambah bersih ±1.030 ha dan hutan berkurang ±1.854 ha. Angka ini berasal dari 10 kotak sampel dan hanya untuk ilustrasi.
+In the example, about 1,295 ha of pre-fire forest became burned area; burned area grew by about 1,030 ha net and forest shrank by about 1,854 ha. These figures come from 10 sample boxes and are for illustration only.
 
-### 7. Klasifikasi tak terbimbing
+### 7. Unsupervised classification
 
-**3 Model → Unsupervised**, pilih K-means atau ISODATA, atur jumlah klaster, lalu **Run clustering**. Di **Label clusters** setiap klaster diberi kelas (plugin menyarankan kelas terdekat dari profil sampel bila ada); hasil pelabelan menjadi peta tutupan lahan baru.
+**3 Model → Unsupervised**, choose K-means or ISODATA, set the number of clusters, then **Run clustering**. Under **Label clusters** give each cluster a class (the plugin suggests the nearest class from the sample profiles when there are samples); the labelled clusters become a new land cover map.
 
-![K-means 8 klaster dan pelabelan](docs/img/readme/10-kmeans.png)
+![K-means with 8 clusters and labelling](docs/img/readme/10-kmeans.png)
 
-### 8. Ekspor
+### 8. Export
 
-**Export** (Ctrl+E) membuka dialog: centang isi yang diinginkan, beri awalan nama file, lalu **Choose folder and export**. Semua file ditulis langsung ke folder yang dipilih. Peramban tanpa akses folder akan mengunduh file satu per satu.
+**Export** (Ctrl+E) opens a dialog: tick what you need, set a file name prefix, then **Choose folder and export**. All files are written straight into the chosen folder. Browsers without folder access download the files one by one.
 
 | File | Format |
 |---|---|
-| Raster klasifikasi | GeoTIFF Uint8 berpalet, NoData 0 |
-| Poligon per kelas | GeoJSON |
-| Laporan akurasi | XLSX (OA, kappa, matriks, PA/UA, akurasi berbasis luas) |
-| Grafik | PNG 300 dpi + SVG |
-| Sampel latih | GeoJSON |
-| Perubahan lahan | XLSX (change matrix, gains/losses) |
+| Classified raster | Uint8 paletted GeoTIFF, NoData 0 |
+| Polygons per class | GeoJSON |
+| Accuracy report | XLSX (OA, kappa, matrix, PA/UA, area-based accuracy) |
+| Charts | 300 dpi PNG + SVG |
+| Training samples | GeoJSON |
+| Land cover change | XLSX (change matrix, gains/losses) |
 
-**Send to GeoLibre map** menambahkan hasil sebagai layer COG di peta GeoLibre dan memperbesar peta ke sana.
+**Send to GeoLibre map** adds the result as a COG layer on the GeoLibre map and zooms to it.
 
-### Pintasan keyboard
+### Keyboard shortcuts
 
-| Tombol | Aksi |
+| Key | Action |
 |---|---|
 | `1` … `6` | Map, Split view, Charts, Accuracy, Change, Log |
-| `0` | zoom ke seluruh citra |
-| `P` `G` `C` `R` `H` | alat Point, Polygon, Circle, Rectangle, Pan |
-| `Ctrl+Z` | batalkan sampel terakhir |
-| `F5` | jalankan klasifikasi / clustering |
-| `Ctrl+E` | ekspor ke folder |
-| `Esc` | batalkan gambar yang belum selesai, tutup dialog |
+| `0` | zoom to the whole image |
+| `P` `G` `C` `R` `H` | Point, Polygon, Circle, Rectangle, Pan tools |
+| `Ctrl+Z` | undo the last sample |
+| `F5` | run classification / clustering |
+| `Ctrl+E` | export to a folder |
+| `Esc` | cancel an unfinished shape, close a dialog |
 
-## Metode dan rumus
+## Methods and formulas
 
-### Notasi
+### Notation
 
-$n$ jumlah piksel latih, $d$ jumlah input (band + indeks), $K$ jumlah kelas, $n_k$ jumlah piksel kelas $k$.
+$n$ number of training pixels, $d$ number of inputs (bands + indices), $K$ number of classes, $n_k$ number of pixels of class $k$.
 
 ### Random Forest
 
-Setiap pohon dilatih pada sampel bootstrap berukuran $\text{bag} \cdot n$. Pada tiap node dipilih acak $m = \mathrm{round}(\sqrt{d})$ variabel, dan split dipilih yang paling menurunkan ketidakmurnian Gini:
+Each tree is trained on a bootstrap sample of size $\text{bag} \cdot n$. At each node $m = \mathrm{round}(\sqrt{d})$ variables are drawn at random, and the split that most reduces Gini impurity is chosen:
 
 ```math
 G(t) = 1 - \sum_{k=1}^{K} p_{k}(t)^{2}, \qquad \Delta G = n_t\,G(t) - n_{L}\,G(L) - n_{R}\,G(R)
 ```
 
-Prediksi adalah suara terbanyak semua pohon. Pentingnya variabel $j$ adalah jumlah $\Delta G$ pada split yang memakai $j$, dinormalkan sehingga totalnya 1. Akurasi *out-of-bag* dihitung dari pohon yang tidak memakai piksel itu dalam bootstrap-nya (Breiman, 2001).
+The prediction is the majority vote of all trees. The importance of variable $j$ is the sum of $\Delta G$ over the splits on $j$, normalised to sum to 1. *Out-of-bag* accuracy uses, for each pixel, only the trees that did not draw it in their bootstrap (Breiman, 2001).
 
 ### Gradient Tree Boost
 
-Model aditif per kelas $F_k(x)$ dengan softmax dan multinomial deviance (Friedman, 2001):
+An additive model per class $F_k(x)$ with softmax and multinomial deviance (Friedman, 2001):
 
 ```math
 p_k(x) = \frac{e^{F_k(x)}}{\sum_{j} e^{F_j(x)}}, \qquad L = -\sum_{i=1}^{n}\sum_{k=1}^{K} y_{ik}\,\ln p_k(x_i)
 ```
 
-Setiap ronde, untuk setiap kelas sebuah pohon kecil dipasang pada gradien $g_{ik} = y_{ik} - p_k(x_i)$ dengan hessian $h_{ik} = p_k(x_i)\,(1-p_k(x_i))$, lalu $F_k \leftarrow F_k + \nu\, f_k$ dengan shrinkage $\nu$ (default 0,05) dan subsampel baris (default 0,7).
+In every round, for every class, a small tree is fitted to the gradient $g_{ik} = y_{ik} - p_k(x_i)$ with hessian $h_{ik} = p_k(x_i)\,(1-p_k(x_i))$, then $F_k \leftarrow F_k + \nu\, f_k$ with shrinkage $\nu$ (default 0.05) and row subsampling (default 0.7).
 
 ### Support Vector Machine
 
-C-SVC (Cortes & Vapnik, 1995), satu lawan satu untuk multikelas, diselesaikan dengan SMO *maximal violating pair* (Keerthi dkk., 2001). Input distandardisasi $z = (x-\mu)/\sigma$. Bentuk dual:
+C-SVC (Cortes & Vapnik, 1995), one-vs-one for multiple classes, solved with maximal-violating-pair SMO (Keerthi et al., 2001). Inputs are standardised, $z = (x-\mu)/\sigma$. The dual problem:
 
 ```math
 \max_{\alpha}\; \sum_i \alpha_i - \tfrac12 \sum_{i,j} \alpha_i \alpha_j y_i y_j K(x_i, x_j) \quad \text{s.t. } 0 \le \alpha_i \le C,\; \sum_i \alpha_i y_i = 0
@@ -202,24 +204,24 @@ C-SVC (Cortes & Vapnik, 1995), satu lawan satu untuk multikelas, diselesaikan de
 |---|---|
 | RBF | $\exp(-\gamma\,\lVert x - x' \rVert^{2})$ |
 | Linear | $x^\top x'$ |
-| Polinomial | $(\gamma\, x^\top x' + c_0)^{p}$ |
+| Polynomial | $(\gamma\, x^\top x' + c_0)^{p}$ |
 | Sigmoid | $\tanh(\gamma\, x^\top x' + c_0)$ |
 
-$\gamma$ yang dimasukkan dibagi $d$. Untuk menjaga ukuran matriks kernel, SVM dilatih pada paling banyak 2.000 piksel terstratifikasi.
+The $\gamma$ you enter is divided by $d$. To keep the kernel matrix small, the SVM is trained on at most 2,000 stratified pixels.
 
-### Bobot kelas seimbang
+### Balanced class weights
 
-Dengan *Balance classes*, bobot setiap kelas sama dengan `class_weight="balanced"` di scikit-learn (Pedregosa dkk., 2011):
+With *Balance classes* each class gets the same weight as scikit-learn's `class_weight="balanced"` (Pedregosa et al., 2011):
 
 ```math
 w_k = \frac{n}{K\, n_k}
 ```
 
-RF memakai bootstrap dengan jumlah tarikan sama per kelas, GTB mengalikan gradien dan hessian dengan $w_k$, SVM memakai $C_k = w_k C$.
+RF draws the bootstrap with equal numbers per class, GTB multiplies gradient and hessian by $w_k$, SVM uses $C_k = w_k C$.
 
-### Akurasi
+### Accuracy
 
-Confusion matrix $n_{ij}$: baris $i$ = referensi, kolom $j$ = hasil klasifikasi, $n_{i+}$ dan $n_{+j}$ jumlah baris dan kolom (Congalton, 1991).
+Confusion matrix $n_{ij}$: row $i$ = reference, column $j$ = classified; $n_{i+}$ and $n_{+j}$ are row and column totals (Congalton, 1991).
 
 ```math
 \text{OA} = \frac{\sum_k n_{kk}}{n}, \qquad
@@ -234,9 +236,9 @@ F1_k = \frac{2\,n_{kk}}{n_{k+} + n_{+k}}
 
 (Cohen, 1960)
 
-### Akurasi berbasis luas
+### Area-based accuracy
 
-Mengikuti Olofsson dkk. (2014), cara yang juga dipakai Semi-Automatic Classification Plugin (Congedo, 2021). $W_i$ adalah proporsi luas kelas peta $i$ dan $n_{i\cdot}$ jumlah piksel uji yang dipetakan sebagai $i$:
+Following Olofsson et al. (2014), the estimator the Semi-Automatic Classification Plugin also reports (Congedo, 2021). $W_i$ is the mapped area proportion of class $i$ and $n_{i\cdot}$ the number of test pixels mapped as $i$:
 
 ```math
 \hat p_{ij} = W_i \,\frac{n_{ij}}{n_{i\cdot}}, \qquad
@@ -247,98 +249,98 @@ Mengikuti Olofsson dkk. (2014), cara yang juga dipakai Semi-Automatic Classifica
 ```
 
 ```math
-\mathrm{SE}(\widehat{\text{OA}}) = \sqrt{\sum_i W_i^{2}\,\frac{\widehat{\text{UA}}_i\,(1-\widehat{\text{UA}}_i)}{n_{i\cdot}-1}}, \qquad \text{CI}_{95\%} = \pm \text{1,96}\, \mathrm{SE}
+\mathrm{SE}(\widehat{\text{OA}}) = \sqrt{\sum_i W_i^{2}\,\frac{\widehat{\text{UA}}_i\,(1-\widehat{\text{UA}}_i)}{n_{i\cdot}-1}}, \qquad \text{CI}_{95\%} = \pm 1.96\, \mathrm{SE}
 ```
 
-Di sini indeks $i$ = kelas peta dan $j$ = kelas referensi. Karena piksel uji berasal dari sampel yang digambar tangan, bukan sampel acak, angka ini hanya pendekatan.
+Here $i$ is the map class and $j$ the reference class. Because the test pixels come from hand-drawn samples rather than a random sample, these figures are only an approximation.
 
-### Luas piksel
+### Pixel area
 
-Pada grid geografis (EPSG:4326) luas sel dihitung per baris lintang:
+On a geographic grid (EPSG:4326) the cell area is computed per row of latitude:
 
 ```math
-A_{\text{sel}} = R^{2}\,\Delta\lambda\,\lvert \sin\varphi_{1} - \sin\varphi_{2} \rvert, \qquad R = \text{6 371 008,8 m}
+A_{\text{cell}} = R^{2}\,\Delta\lambda\,\lvert \sin\varphi_{1} - \sin\varphi_{2} \rvert, \qquad R = 6\,371\,008.8\ \text{m}
 ```
 
-Pada grid terproyeksi $A_{\text{sel}} = \lvert\Delta x\,\Delta y\rvert$.
+On a projected grid $A_{\text{cell}} = \lvert\Delta x\,\Delta y\rvert$.
 
 ### K-means
 
-Meminimalkan jumlah kuadrat jarak dalam klaster (Lloyd, 1982):
+Minimises the within-cluster sum of squares (Lloyd, 1982):
 
 ```math
 J = \sum_{k=1}^{K} \sum_{x \in C_k} \lVert x - \mu_k \rVert^{2}
 ```
 
-Pusat awal dengan k-means++ (Arthur & Vassilvitskii, 2007): pusat berikutnya dipilih dengan peluang sebanding $D(x)^{2}$, jarak kuadrat ke pusat terdekat yang sudah ada. Iterasi berhenti setelah *Max iterations* atau bila bagian piksel yang berpindah klaster di bawah ambang. Input distandardisasi lebih dulu; klaster dihitung pada sampel piksel acak (default 50.000), lalu setiap piksel citra diberi pusat terdekat.
+Initial centres by k-means++ (Arthur & Vassilvitskii, 2007): each next centre is drawn with probability proportional to $D(x)^{2}$, the squared distance to the nearest centre so far. Iteration stops after *Max iterations* or when the share of pixels changing cluster falls below the threshold. Inputs are standardised first; clusters are fitted on a random pixel sample (default 50,000), then every image pixel gets its nearest centre.
 
 ### ISODATA
 
-K-means dalam beberapa ronde (Ball & Hall, 1965). Setelah setiap ronde:
+K-means in several rounds (Ball & Hall, 1965). After each round:
 
-- klaster dengan anggota < `minSize` dibuang;
-- klaster dengan simpangan baku $\sigma_{kj}$ > `maxStd` pada suatu input dipecah dua sepanjang input itu (sampai `maxK`);
-- dua pusat dengan $\lVert \mu_a - \mu_b \rVert$ < `minDist` digabung (sampai `minK`).
+- clusters with fewer than `minSize` members are dropped;
+- a cluster whose standard deviation $\sigma_{kj}$ in some input exceeds `maxStd` is split in two along that input (up to `maxK`);
+- two centres with $\lVert \mu_a - \mu_b \rVert$ < `minDist` are merged (down to `minK`).
 
-`maxStd` dan `minDist` dalam satuan simpangan baku karena input distandardisasi.
+`maxStd` and `minDist` are in standard-deviation units because the inputs are standardised.
 
-### Korelasi antar-input
+### Correlation between inputs
 
-Koefisien Pearson pada 30.000 piksel acak:
+Pearson coefficient on 30,000 random pixels:
 
 ```math
 r_{ab} = \frac{\sum_i (a_i-\bar a)(b_i-\bar b)}{\sqrt{\sum_i (a_i-\bar a)^{2}}\,\sqrt{\sum_i (b_i-\bar b)^{2}}}
 ```
 
-Pasangan dengan $\lvert r \rvert$ mendekati 1 membawa informasi yang hampir sama.
+Pairs with $\lvert r \rvert$ close to 1 carry almost the same information.
 
-### Perubahan lahan
+### Land cover change
 
-Untuk hasil awal $A$ dan akhir $B$ pada grid yang sama:
+For an earlier result $A$ and a later result $B$ on the same grid:
 
 ```math
-T_{ij} = \sum_{p} A_{\text{sel}}(p)\;[A(p) = i]\,[B(p) = j]
+T_{ij} = \sum_{p} A_{\text{cell}}(p)\;[A(p) = i]\,[B(p) = j]
 ```
 
 ```math
 \text{gain}_j = \sum_{i \ne j} T_{ij}, \qquad \text{loss}_i = \sum_{j \ne i} T_{ij}, \qquad \text{net}_k = \text{gain}_k - \text{loss}_k
 ```
 
-Diagram Sankey menggambar setiap $T_{ij}$ sebagai pita dengan lebar sebanding luasnya.
+The Sankey diagram draws each $T_{ij}$ as a band whose width is proportional to its area.
 
 ### Smoothing
 
-Filter mayoritas: setiap piksel mengambil kelas yang paling sering muncul di jendela 3 × 3 atau 5 × 5. Piksel NoData tetap NoData dan tidak ikut memilih.
+Majority filter: each pixel takes the most frequent class in its 3 × 3 or 5 × 5 window. NoData pixels stay NoData and do not vote.
 
-## Indeks spektral
+## Spectral indices
 
-Rumus memakai reflektans (0–1) dengan nama band Sentinel-2; sensor lain dipetakan lewat peran band. Daftar indeks dan rumusnya mengikuti GEEDEF Land Cover Classification Tools.
+Formulas use reflectance (0–1) with Sentinel-2 band names; other sensors are mapped through band roles. The index list and formulas follow GEEDEF Land Cover Classification Tools.
 
-| Indeks | Rumus | Sumber |
+| Index | Formula | Source |
 |---|---|---|
-| NDVI | $(B8-B4)/(B8+B4)$ | Rouse dkk. (1974) |
-| EVI2 | $\text{2,5}\,(B8-B4)/(B8+\text{2,4}\,B4+1)$ | Jiang dkk. (2008) |
-| SAVI | $\text{1,5}\,(B8-B4)/(B8+B4+\text{0,5})$ | Huete (1988) |
-| GCVI | $B8/B3 - 1$ | Gitelson dkk. (2003) |
+| NDVI | $(B8-B4)/(B8+B4)$ | Rouse et al. (1974) |
+| EVI2 | $2.5\,(B8-B4)/(B8+2.4\,B4+1)$ | Jiang et al. (2008) |
+| SAVI | $1.5\,(B8-B4)/(B8+B4+0.5)$ | Huete (1988) |
+| GCVI | $B8/B3 - 1$ | Gitelson et al. (2003) |
 | NDWI | $(B8-B11)/(B8+B11)$ | Gao (1996) |
 | NDMI | $(B8-B11)/(B8+B11)$ | Gao (1996) |
 | MNDWI | $(B3-B11)/(B3+B11)$ | Xu (2006) |
-| NDBI | $(B11-B8)/(B11+B8)$ | Zha dkk. (2003) |
+| NDBI | $(B11-B8)/(B11+B8)$ | Zha et al. (2003) |
 | NBR | $(B8-B12)/(B8+B12)$ | Key & Benson (2006) |
-| NDRE | $(B8A-B5)/(B8A+B5)$ | Barnes dkk. (2000) |
-| IRECI | $(B7-B4)/(B5/B6)$ | Frampton dkk. (2013) |
-| PRI | $(B2-B3)/(B2+B3)$ | Gamon dkk. (1992), versi band lebar |
+| NDRE | $(B8A-B5)/(B8A+B5)$ | Barnes et al. (2000) |
+| IRECI | $(B7-B4)/(B5/B6)$ | Frampton et al. (2013) |
+| PRI | $(B2-B3)/(B2+B3)$ | Gamon et al. (1992), broad-band version |
 | CAI | $B12/B11$ | GEEDEF |
-| HALL_COVER | $-\text{0,017}\,B4 - \text{0,007}\,B8 - \text{0,079}\,B12 + \text{5,22}$ | GEEDEF |
-| MVI | $(B8-B3)/(B11-B3)$ | Baloloy dkk. (2020) |
+| HALL_COVER | $-0.017\,B4 - 0.007\,B8 - 0.079\,B12 + 5.22$ | GEEDEF |
+| MVI | $(B8-B3)/(B11-B3)$ | Baloloy et al. (2020) |
 | GVS | $100\,\text{NDVI} / (100\,\lvert\text{NDVI}\rvert + 100\,\lvert\text{NBR}\rvert + 1)$ | GEEDEF |
-| NDFI | $(\text{GVS}-\text{NPV})/(\text{GVS}+\text{NPV})$, $\text{NPV} = 1-\text{NDVI}$ | GEEDEF, mengikuti gagasan Souza dkk. (2005) |
+| NDFI | $(\text{GVS}-\text{NPV})/(\text{GVS}+\text{NPV})$, $\text{NPV} = 1-\text{NDVI}$ | GEEDEF, after the idea of Souza et al. (2005) |
 
-Ekspresi sendiri boleh memakai `B2 … B12`, `B8A`, angka, `+ - * /`, dan kurung, misalnya `(B8 - B4) / (B8 + B4 + 0.5) * 1.5`.
+Your own expressions may use `B2 … B12`, `B8A`, numbers, `+ - * /` and parentheses, for example `(B8 - B4) / (B8 + B4 + 0.5) * 1.5`.
 
-## Sensor yang didukung
+## Supported sensors
 
-| Sensor | Contoh peta band ke peran |
+| Sensor | Band-to-role mapping |
 |---|---|
 | Sentinel-2 MSI | B2 … B12, B8A |
 | Landsat 8/9 OLI | B2→Blue, B3→Green, B4→Red, B5→NIR, B6→SWIR1, B7→SWIR2 |
@@ -347,32 +349,32 @@ Ekspresi sendiri boleh memakai `B2 … B12`, `B8A`, angka, `+ - * /`, dan kurung
 | WorldView-2/3 | B2→Blue, B3→Green, B5→Red, B6→Red edge, B7→NIR1, B8→NIR2 |
 | SPOT 6/7, Pléiades | B0→Blue, B1→Green, B2→Red, B3→NIR |
 | MODIS surface reflectance | B1→Red, B2→NIR, B3→Blue, B4→Green, B6→SWIR1, B7→SWIR2 |
-| Lainnya | peran diatur manual |
+| Other | roles set by hand |
 
-## Build dan pengujian
+## Build and tests
 
-Butuh Node.js dan checkout [GeoLibre](https://github.com/Defani/GeoLibre) (esbuild dipinjam dari sana; atur `GEOLIBRE_REPO` bila lokasinya lain).
+Needs Node.js and a checkout of [GeoLibre](https://github.com/Defani/GeoLibre) (esbuild is borrowed from it; set `GEOLIBRE_REPO` if it lives elsewhere).
 
 ```bash
-node build.mjs                      # plugin/ dan image-classification-<versi>.zip
-node test/unsup.mjs                 # K-means, ISODATA, korelasi, change matrix
-node test/post.mjs                  # smoothing dan poligonisasi
-node test/weda.mjs <stack.json> <stack.u16> <folder sampel> <out.tif>   # inti pada stack Sentinel-2 nyata
-python tools/serve.py 8098 . <folder band> <folder sampel>              # CORS + byte range untuk web.geolibre.app
+node build.mjs                      # plugin/ and image-classification-<version>.zip
+node test/unsup.mjs                 # K-means, ISODATA, correlation, change matrix
+node test/post.mjs                  # smoothing and polygonisation
+node test/weda.mjs <stack.json> <stack.u16> <samples dir> <out.tif>   # core on a real Sentinel-2 stack
+python tools/serve.py 8098 . <band dir> <samples dir>                 # CORS + byte ranges for web.geolibre.app
 ```
 
-Hasil RF/GTB/SVM sudah dibandingkan dengan scikit-learn pada data yang sama: SVM identik, RF dan GTB berselisih ≤ 0,5 poin OA. Akurasi berbasis luas dicek dengan contoh numerik di Olofsson dkk. (2014).
+RF/GTB/SVM results were compared with scikit-learn on the same data: SVM identical, RF and GTB within 0.5 points of OA. The area-based accuracy was checked against the worked example in Olofsson et al. (2014).
 
-Struktur kode:
+Code layout:
 
-| File | Isi |
+| File | Contents |
 |---|---|
-| `src/core.js` | indeks, sampling, RF, GTB, SVM, akurasi, K-means, ISODATA, statistik, penulis GeoTIFF/XLSX/PNG, poligonisasi (tanpa DOM) |
-| `src/main.js` | status plugin, dock alur kerja, pembacaan raster lewat API GeoLibre |
-| `src/win.js` | jendela penuh, viewer kanvas, grafik SVG, analisis perubahan, ekspor |
-| `src/style.css` | gaya |
+| `src/core.js` | indices, sampling, RF, GTB, SVM, accuracy, K-means, ISODATA, statistics, GeoTIFF/XLSX/PNG writers, polygonisation (no DOM) |
+| `src/main.js` | plugin state, workflow dock, raster reading through the GeoLibre API |
+| `src/win.js` | full window, canvas viewer, SVG charts, change analysis, export |
+| `src/style.css` | styles |
 
-## Daftar pustaka
+## References
 
 - Arthur, D., & Vassilvitskii, S. (2007). k-means++: The advantages of careful seeding. *Proceedings of the 18th Annual ACM-SIAM Symposium on Discrete Algorithms*, 1027–1035.
 - Ball, G. H., & Hall, D. J. (1965). *ISODATA, a novel method of data analysis and pattern classification*. Stanford Research Institute, Menlo Park, CA.
@@ -391,7 +393,7 @@ Struktur kode:
 - Huete, A. R. (1988). A soil-adjusted vegetation index (SAVI). *Remote Sensing of Environment, 25*(3), 295–309. https://doi.org/10.1016/0034-4257(88)90106-X
 - Jiang, Z., Huete, A. R., Didan, K., & Miura, T. (2008). Development of a two-band enhanced vegetation index without a blue band. *Remote Sensing of Environment, 112*(10), 3833–3845. https://doi.org/10.1016/j.rse.2008.06.006
 - Keerthi, S. S., Shevade, S. K., Bhattacharyya, C., & Murthy, K. R. K. (2001). Improvements to Platt's SMO algorithm for SVM classifier design. *Neural Computation, 13*(3), 637–649. https://doi.org/10.1162/089976601300014493
-- Key, C. H., & Benson, N. C. (2006). Landscape assessment (LA): Sampling and analysis methods. Dalam D. C. Lutes dkk. (Ed.), *FIREMON: Fire effects monitoring and inventory system* (Gen. Tech. Rep. RMRS-GTR-164-CD). USDA Forest Service, Rocky Mountain Research Station.
+- Key, C. H., & Benson, N. C. (2006). Landscape assessment (LA): Sampling and analysis methods. In D. C. Lutes et al. (Eds.), *FIREMON: Fire effects monitoring and inventory system* (Gen. Tech. Rep. RMRS-GTR-164-CD). USDA Forest Service, Rocky Mountain Research Station.
 - Lloyd, S. P. (1982). Least squares quantization in PCM. *IEEE Transactions on Information Theory, 28*(2), 129–137. https://doi.org/10.1109/TIT.1982.1056489
 - Olofsson, P., Foody, G. M., Herold, M., Stehman, S. V., Woodcock, C. E., & Wulder, M. A. (2014). Good practices for estimating area and assessing accuracy of land change. *Remote Sensing of Environment, 148*, 42–57. https://doi.org/10.1016/j.rse.2014.02.015
 - Pedregosa, F., Varoquaux, G., Gramfort, A., Michel, V., Thirion, B., Grisel, O., … Duchesnay, É. (2011). Scikit-learn: Machine learning in Python. *Journal of Machine Learning Research, 12*, 2825–2830.
@@ -400,12 +402,12 @@ Struktur kode:
 - Xu, H. (2006). Modification of normalised difference water index (NDWI) to enhance open water features in remotely sensed imagery. *International Journal of Remote Sensing, 27*(14), 3025–3033. https://doi.org/10.1080/01431160600589179
 - Zha, Y., Gao, J., & Ni, S. (2003). Use of normalized difference built-up index in automatically mapping urban areas from TM imagery. *International Journal of Remote Sensing, 24*(3), 583–594. https://doi.org/10.1080/01431160304987
 
-Perangkat dan inspirasi:
+Tools and inspiration:
 
-- GEEDEF Land Cover Classification Tools (Google Earth Engine) — sumber default parameter dan rumus indeks: https://github.com/Defani/GEEDEF-Land-Cover-Classification-Tools
-- Semi-Automatic Classification Plugin (QGIS) — akurasi berbasis luas dan bobot seimbang: https://github.com/semiautomaticgit/SemiAutomaticClassificationPlugin
-- Data contoh kebakaran Gunung Lawu 2023: https://github.com/Defani/NBR-Karhutla-Gunung-Lawu-GEE
+- GEEDEF Land Cover Classification Tools (Google Earth Engine), source of the default parameters and index formulas: https://github.com/Defani/GEEDEF-Land-Cover-Classification-Tools
+- Semi-Automatic Classification Plugin (QGIS), area-based accuracy and balanced weights: https://github.com/semiautomaticgit/SemiAutomaticClassificationPlugin
+- Example data, 2023 Mount Lawu fire: https://github.com/Defani/NBR-Karhutla-Gunung-Lawu-GEE
 
-## Lisensi
+## License
 
-MIT © Defani Arman Alfitriansyah. Lihat [LICENSE](LICENSE).
+MIT © Defani Arman Alfitriansyah. See [LICENSE](LICENSE).
