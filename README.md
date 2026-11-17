@@ -247,7 +247,7 @@ Mengikuti Olofsson dkk. (2014), cara yang juga dipakai Semi-Automatic Classifica
 ```
 
 ```math
-\mathrm{SE}(\widehat{\text{OA}}) = \sqrt{\sum_i W_i^{2}\,\frac{\widehat{\text{UA}}_i\,(1-\widehat{\text{UA}}_i)}{n_{i\cdot}-1}}, \qquad \text{CI}_{95\%} = \pm 1{,}96\, \mathrm{SE}
+\mathrm{SE}(\widehat{\text{OA}}) = \sqrt{\sum_i W_i^{2}\,\frac{\widehat{\text{UA}}_i\,(1-\widehat{\text{UA}}_i)}{n_{i\cdot}-1}}, \qquad \text{CI}_{95\%} = \pm \text{1,96}\, \mathrm{SE}
 ```
 
 Di sini indeks $i$ = kelas peta dan $j$ = kelas referensi. Karena piksel uji berasal dari sampel yang digambar tangan, bukan sampel acak, angka ini hanya pendekatan.
@@ -257,7 +257,7 @@ Di sini indeks $i$ = kelas peta dan $j$ = kelas referensi. Karena piksel uji ber
 Pada grid geografis (EPSG:4326) luas sel dihitung per baris lintang:
 
 ```math
-A_{\text{sel}} = R^{2}\,\Delta\lambda\,\lvert \sin\varphi_{1} - \sin\varphi_{2} \rvert, \qquad R = 6\,371\,008{,}8\ \text{m}
+A_{\text{sel}} = R^{2}\,\Delta\lambda\,\lvert \sin\varphi_{1} - \sin\varphi_{2} \rvert, \qquad R = 6\,371\,\text{008,8}\ \text{m}
 ```
 
 Pada grid terproyeksi $A_{\text{sel}} = \lvert\Delta x\,\Delta y\rvert$.
@@ -317,8 +317,8 @@ Rumus memakai reflektans (0–1) dengan nama band Sentinel-2; sensor lain dipeta
 | Indeks | Rumus | Sumber |
 |---|---|---|
 | NDVI | $(B8-B4)/(B8+B4)$ | Rouse dkk. (1974) |
-| EVI2 | $2{,}5\,(B8-B4)/(B8+2{,}4\,B4+1)$ | Jiang dkk. (2008) |
-| SAVI | $1{,}5\,(B8-B4)/(B8+B4+0{,}5)$ | Huete (1988) |
+| EVI2 | $\text{2,5}\,(B8-B4)/(B8+\text{2,4}\,B4+1)$ | Jiang dkk. (2008) |
+| SAVI | $\text{1,5}\,(B8-B4)/(B8+B4+\text{0,5})$ | Huete (1988) |
 | GCVI | $B8/B3 - 1$ | Gitelson dkk. (2003) |
 | NDWI | $(B8-B11)/(B8+B11)$ | Gao (1996) |
 | NDMI | $(B8-B11)/(B8+B11)$ | Gao (1996) |
@@ -329,7 +329,7 @@ Rumus memakai reflektans (0–1) dengan nama band Sentinel-2; sensor lain dipeta
 | IRECI | $(B7-B4)/(B5/B6)$ | Frampton dkk. (2013) |
 | PRI | $(B2-B3)/(B2+B3)$ | Gamon dkk. (1992), versi band lebar |
 | CAI | $B12/B11$ | GEEDEF |
-| HALL_COVER | $-0{,}017\,B4 - 0{,}007\,B8 - 0{,}079\,B12 + 5{,}22$ | GEEDEF |
+| HALL_COVER | $-\text{0,017}\,B4 - \text{0,007}\,B8 - \text{0,079}\,B12 + \text{5,22}$ | GEEDEF |
 | MVI | $(B8-B3)/(B11-B3)$ | Baloloy dkk. (2020) |
 | GVS | $100\,\text{NDVI} / (100\,\lvert\text{NDVI}\rvert + 100\,\lvert\text{NBR}\rvert + 1)$ | GEEDEF |
 | NDFI | $(\text{GVS}-\text{NPV})/(\text{GVS}+\text{NPV})$, $\text{NPV} = 1-\text{NDVI}$ | GEEDEF, mengikuti gagasan Souza dkk. (2005) |
