@@ -172,7 +172,7 @@ $n$ jumlah piksel latih, $d$ jumlah input (band + indeks), $K$ jumlah kelas, $n_
 
 ### Random Forest
 
-Setiap pohon dilatih pada sampel bootstrap berukuran $\text{bag} \cdot n$. Pada tiap node dipilih acak $m = \operatorname{round}(\sqrt{d})$ variabel, dan split dipilih yang paling menurunkan ketidakmurnian Gini:
+Setiap pohon dilatih pada sampel bootstrap berukuran $\text{bag} \cdot n$. Pada tiap node dipilih acak $m = \mathrm{round}(\sqrt{d})$ variabel, dan split dipilih yang paling menurunkan ketidakmurnian Gini:
 
 ```math
 G(t) = 1 - \sum_{k=1}^{K} p_{k}(t)^{2}, \qquad \Delta G = n_t\,G(t) - n_{L}\,G(L) - n_{R}\,G(R)
@@ -247,7 +247,7 @@ Mengikuti Olofsson dkk. (2014), cara yang juga dipakai Semi-Automatic Classifica
 ```
 
 ```math
-\operatorname{SE}(\widehat{\text{OA}}) = \sqrt{\sum_i W_i^{2}\,\frac{\widehat{\text{UA}}_i\,(1-\widehat{\text{UA}}_i)}{n_{i\cdot}-1}}, \qquad \text{CI}_{95\%} = \pm 1{,}96\, \operatorname{SE}
+\mathrm{SE}(\widehat{\text{OA}}) = \sqrt{\sum_i W_i^{2}\,\frac{\widehat{\text{UA}}_i\,(1-\widehat{\text{UA}}_i)}{n_{i\cdot}-1}}, \qquad \text{CI}_{95\%} = \pm 1{,}96\, \mathrm{SE}
 ```
 
 Di sini indeks $i$ = kelas peta dan $j$ = kelas referensi. Karena piksel uji berasal dari sampel yang digambar tangan, bukan sampel acak, angka ini hanya pendekatan.
