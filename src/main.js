@@ -1,7 +1,7 @@
 // Image Classification: GeoLibre plugin UI. Core (indices, classifiers, accuracy, GeoTIFF writer) is prepended by build.mjs.
 const ID = "image-classification";
 const PANEL = ID + "-panel";
-const VERSION = "0.3.1";
+const VERSION = "0.4.1";
 const SRC = "icl-samples", DRAFT = "icl-draft";
 const ICON =
   "data:image/svg+xml;utf8," +
@@ -33,7 +33,7 @@ const S = {
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const nf = (n, d = 0) => Number(n).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
 const pct = (v, d = 2) => (v == null ? "–" : nf(v * 100, d));
-const $ = (sel) => S.root?.querySelector(sel);
+const $ = (sel) => (S.win ?? S.root)?.querySelector(sel);
 const opt = (pairs, sel) => pairs.map(([v, t]) => `<option value="${esc(v)}"${String(v) === String(sel) ? " selected" : ""}>${esc(t)}</option>`).join("");
 const P = () => S.params;
 
@@ -42,6 +42,7 @@ S.params = {
   gtbTrees: 200, gtbShrink: 0.05, gtbSamp: 0.7, gtbNodes: 5,
   svmKernel: "RBF", svmCost: 10, svmGamma: 0.5, svmDegree: 3, svmCoef: 0,
   split: 0.7, splitBy: "pixel", maxPix: 500, seed: 42, balanced: false, smooth: 0, outName: "Land Cover (Random Forest)",
+  kind: "sup", ualgo: "KM", uK: 8, uIter: 30, uTol: 0.5, uSample: 50000,
 };
 
 // ================================================================ raster sources
@@ -158,8 +159,8 @@ function removeGroup(group) {
 }
 
 function selectedBands() {
-  const out = [];
-  for (const s of S.sources) if (s.tiff) for (const b of s.bands) if (S.inputs[b.key]?.on) out.push({ src: s, band: b, role: S.inputs[b.key].role });
+  const out = [], set = activeSet();
+  for (const s of S.sources) if (s.tiff && setKeyOf(s) === set) for (const b of s.bands) if (S.inputs[b.key]?.on) out.push({ src: s, band: b, role: S.inputs[b.key].role });
   return out;
 }
 function rolesPresent() {
@@ -181,7 +182,8 @@ const isGeo = (crs) => crs === 4326 || crs === 4269 || crs === 4258 || (typeof c
 function epsgOf(crs) { return typeof crs === "number" ? crs : crs?.id?.code ?? null; }
 
 async function makeGrid() {
-  const ref = S.sources.find((s) => s.key === S.gridKey && s.tiff);
+  const set = activeSet(), mine = S.sources.filter((s) => s.tiff && setKeyOf(s) === set).sort((a, b) => Math.abs(a.tiff.transform[0]) - Math.abs(b.tiff.transform[0]));
+  const ref = mine.find((s) => s.key === S.gridKey) ?? mine[0];
   if (!ref) throw new Error("Choose a reference layer.");
   const t = ref.tiff, [a, b, c, d, e, f] = t.transform;
   if (b || d) throw new Error("Rotated rasters are not supported.");
@@ -482,6 +484,7 @@ function overlay() {
 /** Samples, sketch and identify pin on the SVG over the map. The desktop paints raster layers above vector layers,
  * so the class layers alone can end up hidden under the image being sampled; the overlay keeps the samples in view. */
 function drawOverlay() {
+  if (S.win) { if (S.ov) S.ov.innerHTML = ""; drawViewer(); return; }
   const map = getMap(), ov = overlay();
   if (!ov) return;
   const fc = draftFC();
@@ -535,6 +538,7 @@ const FL_ICONS = {
   rect: '<rect x="4" y="6" width="16" height="12"/>',
 };
 function renderFloat() {
+  if (S.win) { S.fl?.remove(); S.fl = null; return; }
   const map = getMap();
   if (!map || !isOpen()) { S.fl?.remove(); S.fl = null; return; }
   if (!S.fl || !S.fl.isConnected) {
@@ -673,7 +677,7 @@ function setTool(tool) {
   S.tool = tool;
   S.draft = [];
   S.press = null; S.dragging = false;
-  const map = getMap();
+  const map = S.win ? null : getMap();
   if (map) {
     lockPan(map, tool !== "pan");
     map.getCanvas().style.cursor = "";
@@ -685,6 +689,7 @@ function setTool(tool) {
 }
 
 function bindMap() {
+  if (S.win) return; // the window draws on its own viewer
   const map = getMap();
   if (!map || S.mapBound === map) return;
   unbindMap();
@@ -978,7 +983,7 @@ function card(id, full = false) {
   </div>`;
 }
 function redrawCard(id) {
-  for (const [el, full] of [[S.root, false], [S.fullEl, true]]) { const box = el?.querySelector(`[data-card="${id}"].icl-card`); if (box) box.outerHTML = card(id, full); }
+  for (const [el, full] of [[S.win ?? S.root, false], [S.fullEl, true]]) { const box = el?.querySelector(`[data-card="${id}"].icl-card`); if (box) box.outerHTML = card(id, full); }
 }
 function closeFull() { S.fullEl?.remove(); S.fullEl = null; S.full = null; S.menu = null; }
 function openFull(id) {
@@ -1148,8 +1153,10 @@ async function runClassification() {
     const maxCode = S.classes.reduce((a, c) => Math.max(a, c.code), 0);
     const final = p.smooth ? majority(cls, grid.width, grid.height, p.smooth, Math.max(maxCode, ...sp.codes)) : cls;
     const areas = classAreas(final, grid, Math.max(maxCode, ...sp.codes));
-    S.result = { algo: p.algo, opts, names, model, sp, accTest, accTrain, grid, cls: final, areas, codes: sp.codes, classes: S.classes.map((c) => ({ ...c })), splitBy: p.splitBy, seconds: (performance.now() - t0) / 1000, smooth: p.smooth, name: p.outName.trim() || "Land Cover" };
-    await addResultLayer();
+    const featRoles = [...st.bands.map((b) => ({ role: b.role })), ...indexDefs().map((x) => ({ index: x.name }))];
+    pushResult({ kind: "classified", algo: p.algo, opts, names, featRoles, model, sp, accTest, accTrain, grid, cls: final, areas, codes: sp.codes, classes: S.classes.map((c) => ({ ...c })), splitBy: p.splitBy, seconds: (performance.now() - t0) / 1000, smooth: p.smooth, name: (p.outName.trim() || "Land Cover") + (S.win && imageSets().length > 1 ? ` (${activeSetName()})` : "") });
+    wlog(`${ALGO_NAMES[p.algo]} on ${activeSetName()}: ${d} inputs, ${nf(sp.train.cells.length)} training / ${nf(sp.test.cells.length)} test pixels, ${accTest ? `OA ${pct(accTest.oa)}%, kappa ${accTest.kappa.toFixed(3)}` : "no test pixels"}, ${nf((performance.now() - t0) / 1000, 1)} s`);
+    if (!S.win) await addResultLayer();
     S.tab = "results";
   } catch (e) {
     console.warn("[Image Classification]", e);
@@ -1366,7 +1373,7 @@ async function thresholdAction() {
 
 // ---------------------------------------------------------------- post-processing: raster to dissolved polygons
 
-S.post = { mmu: 0.5 };
+S.post = { mmu: 0 };
 function cellAreaM2(g) {
   const dx = (g.bounds[2] - g.bounds[0]) / g.width, dy = (g.bounds[3] - g.bounds[1]) / g.height;
   if (!g.geographic) return dx * dy;
@@ -1483,7 +1490,8 @@ const isOpen = () => !!S.root?.isConnected;
 function tabLayers() {
   const roles = rolesPresent();
   let lastGroup = null;
-  const srcRows = S.sources.map((s) => {
+  // in the window only the bands of the selected image are listed; the others are in the Images list
+  const srcRows = S.sources.filter((s) => !S.win || !s.tiff || setKeyOf(s) === activeSet()).map((s) => {
     const g = s.file ? s.group || "Files" : "Map layers";
     let head = "";
     if (g !== lastGroup) {
@@ -1516,7 +1524,7 @@ function tabLayers() {
     <div class="icl-row">
       <button type="button" class="icl-btn2" data-a="addFolder" title="Read every GeoTIFF in a folder without adding them to the map">Add folder…</button>
       <button type="button" class="icl-btn2" data-a="addFiles">Add files…</button>
-      <label class="icl-f"><span>Band names</span><select data-k="sensor">${opt([["s2", "Sentinel-2"], ["l8", "Landsat 8/9"]], S.sensor)}</select></label>
+      <label class="icl-f"><span>Sensor</span><select data-k="sensor">${opt(SENSORS, S.sensor)}</select></label>
     </div>
   </section>
   <section class="icl-sec">
@@ -1541,7 +1549,7 @@ function tabLayers() {
 
 // ---------------------------------------------------------------- composite bands
 
-const COMP_PRESETS = [["true", "True colour", ["B4", "B3", "B2"]], ["false", "False colour", ["B8", "B4", "B3"]], ["swir", "SWIR", ["B12", "B8", "B4"]], ["agri", "Agriculture", ["B11", "B8", "B2"]], ["custom", "Custom", null]];
+const COMP_PRESETS = [["true", "True colour", ["B4", "B3", "B2"]], ["false", "False colour", ["B8", "B4", "B3"]], ["burn", "Burn scar", ["B11", "B8", "B3"]], ["swir", "SWIR", ["B12", "B8", "B4"]], ["agri", "Agriculture", ["B11", "B8", "B2"]], ["custom", "Custom", null]];
 S.comp = { preset: "true", r: "", g: "", b: "", name: "" };
 
 /** The three inputs of the RGB composite, by feature name; a preset wins when its bands are selected. */
@@ -1562,15 +1570,15 @@ function singleChoice() {
 }
 function compositeSection() {
   const names = featureNames(), [r, g, b] = compChannels(), roles = rolesPresent();
-  const short = (n) => S.inputs[selectedBands().find((x) => x.band.label === n)?.band.key]?.role || n;
+  const short = (n) => { const role = S.inputs[selectedBands().find((x) => x.band.label === n)?.band.key]?.role; return role ? (S.bandNames === "name" ? ROLE_NAMES[role] ?? role : role) : n; };
   const presetOk = (p) => !p[2] || p[2].every((k) => roles[k]);
   const ch = (k, v, label) => `<label class="icl-f"><span>${label}</span><select data-k="${k}"${names.length ? "" : " disabled"}>${opt(names.map((n) => [n, n]), v)}</select></label>`;
   const sc = singleChoice(), off = names.length && !S.busy ? "" : " disabled";
   return `
   <section class="icl-sec last" data-sec="composite">
     <div class="icl-mid"><h3 class="icl-head">Show on map</h3><span class="icl-lab">${names.length} layers available</span></div>
-    <span class="icl-sub">RGB composite</span>
-    <label class="icl-f"><span>Preset</span><select data-k="cPreset">${COMP_PRESETS.map((p) => `<option value="${p[0]}"${p[0] === S.comp.preset ? " selected" : ""}${presetOk(p) ? "" : " disabled"}>${p[1]}${p[2] ? ` (${p[2].join(" ")})` : ""}</option>`).join("")}</select></label>
+    <div class="icl-mid"><span class="icl-sub" style="flex:1">RGB composite</span><div class="icl-seg" style="flex:0 0 190px">${[["role", "Band number"], ["name", "Band name"]].map(([k, l]) => `<button type="button" data-bandnames="${k}" class="${S.bandNames === k ? "on" : ""}" aria-pressed="${S.bandNames === k}">${l}</button>`).join("")}</div></div>
+    <label class="icl-f"><span>Preset</span><select data-k="cPreset">${COMP_PRESETS.map((p) => `<option value="${p[0]}"${p[0] === S.comp.preset ? " selected" : ""}${presetOk(p) ? "" : " disabled"}>${p[1]}${p[2] ? ` (${p[2].map((r) => (S.bandNames === "name" ? ROLE_NAMES[r] : r)).join(" ")})` : ""}</option>`).join("")}</select></label>
     <div class="icl-row">${ch("cR", r, "Red")}${ch("cG", g, "Green")}${ch("cB", b, "Blue")}</div>
     <div class="icl-row">
       <label class="icl-f"><span>Layer name</span><input type="text" data-k="cLayer" maxlength="80" value="${esc(S.comp.name || `Composite (${[r, g, b].map(short).join(" ")})`)}"></label>
@@ -1693,6 +1701,12 @@ function slider(k, label, min, max, step, fmt = (v) => v) {
 const FMT = { rfBag: (v) => Math.round(v * 100) + "%", gtbSamp: (v) => Math.round(v * 100) + "%", split: (v) => `${Math.round(v * 100)} / ${Math.round((1 - v) * 100)}`, gtbShrink: (v) => (+v).toFixed(2), svmGamma: (v) => (+v).toFixed(3) };
 function tabModel() {
   const p = P();
+  const kinds = `<section class="icl-sec"><div class="icl-seg">${[["sup", "Supervised"], ["unsup", "Unsupervised"]].map(([k, l]) => `<button type="button" data-kind="${k}" class="${p.kind === k ? "on" : ""}" aria-pressed="${p.kind === k}">${l}</button>`).join("")}</div></section>`;
+  if (p.kind === "unsup") return kinds + unsupModel();
+  return kinds + tabModelSup();
+}
+function tabModelSup() {
+  const p = P();
   let body = "";
   if (p.algo === "RF") body = slider("rfTrees", "Number of trees", 10, 1000, 10) + slider("rfLeaf", "Min leaf population", 1, 20, 1) + slider("rfBag", "Bag fraction", 0.3, 1, 0.05, FMT.rfBag) +
     `<div class="icl-row"><label class="icl-f"><span>Variables per split</span><select data-p="rfVars">${opt([["sqrt", "Auto (√n)"], ["log2", "log₂ n + 1"], ["all", "All"]], p.rfVars)}</select></label>
@@ -1792,7 +1806,7 @@ function summary() {
 function render() {
   if (!S.root) return;
   if (S.tab !== "threshold" && S.identify) setIdentify(false, true);
-  const body = S.tab === "layers" ? tabLayers() : S.tab === "samples" ? tabSamples() : S.tab === "model" ? tabModel() : S.tab === "threshold" ? tabThreshold() : tabResults();
+  const body = S.tab === "layers" ? tabLayers() : S.tab === "samples" ? tabSamples() : S.tab === "model" ? tabModel() : S.tab === "threshold" ? tabThreshold() : S.win ? resultsDock() : tabResults();
   const i = TABS.findIndex((t) => t[0] === S.tab), scroll = S.root.querySelector(".icl-body")?.scrollTop ?? 0, sameTab = S.lastTab === S.tab;
   S.root.innerHTML = `
     <div class="icl-tabs" role="tablist">${TABS.map(([k, l], n) => `<button type="button" role="tab" data-tab="${k}" class="${S.tab === k ? "on" : ""}" aria-selected="${S.tab === k}"><span class="icl-num">${n + 1}</span>${l}</button>`).join("")}</div>
@@ -1803,7 +1817,7 @@ function render() {
       <div class="icl-mid">
         <span class="icl-sum">${summary()}</span>
         ${i > 0 && i < 4 ? `<button type="button" class="icl-btn2" data-a="back">Back</button>` : ""}
-        ${i < 2 ? `<button type="button" class="icl-btn" data-a="next">Next</button>` : i < 4 ? `<button type="button" class="icl-btn" data-a="run"${S.busy ? " disabled" : ""}>${S.busy ? "Running…" : S.result ? "Run again" : "Run classification"}</button>` : ""}
+        ${i < 2 ? `<button type="button" class="icl-btn" data-a="next">Next</button>` : i < 4 ? `<button type="button" class="icl-btn" data-a="run"${S.busy ? " disabled" : ""}>${S.busy ? "Running…" : P().kind === "unsup" && S.tab === "model" ? "Run clustering" : S.result ? "Run again" : "Run classification"}</button>` : ""}
       </div>
     </div>`;
   if (sameTab) S.root.querySelector(".icl-body").scrollTop = scroll;
@@ -1811,6 +1825,7 @@ function render() {
   if (S.tab === "samples") { renderHint(); if (S.profile && !S.profile.error) renderProfile(); updateProfile(); }
   if (S.tab === "threshold") updateThreshold();
   renderFloat();
+  if (S.win) winRefresh();
 }
 
 function renderHint() {
@@ -1853,11 +1868,12 @@ function onClick(e) {
   if (ds.pick) { S.active = +ds.pick; S.draft = []; syncMap(); return render(); }
   if (ds.del) { const c = +ds.del; S.classes = S.classes.filter((x) => x.code !== c); S.samples = S.samples.filter((s) => s.code !== c); if (S.active === c) S.active = S.classes[0]?.code ?? 0; invalidate(); syncMap(); return render(); }
   if (ds.idx) { S.indexOn[ds.idx] = !S.indexOn[ds.idx]; return render(); }
+  if (ds.bandnames) { S.bandNames = ds.bandnames; S.comp.name = ""; return render(); }
   if (ds.pal) { const [n, c] = ds.pal.split("|"); S.newName = n; S.newColor = c.toLowerCase(); return render(); }
   const a = ds.a;
   if (a === "next") { S.tab = TABS[TABS.findIndex((x) => x[0] === S.tab) + 1][0]; S.msg = ""; render(); }
   else if (a === "back") { S.tab = TABS[TABS.findIndex((x) => x[0] === S.tab) - 1][0]; S.msg = ""; render(); }
-  else if (a === "run") runClassification();
+  else if (a === "run") (P().kind === "unsup" ? runClustering : runClassification)();
   else if (a === "refresh") refreshSources();
   else if (a === "addFiles") addFiles();
   else if (a === "addFolder") addFolder();
@@ -1961,22 +1977,9 @@ function mount(container) {
   };
 }
 
-/** Docked in the right sidebar where the host has one; a floating window otherwise. */
-function open() {
-  if (S.docked && S.app.openRightPanel?.(PANEL)) {
-    // the desktop can leave a panel opened from a toolbar menu folded to its rail: unfold it if so
-    setTimeout(() => { if (S.app && !isOpen()) S.app.openRightPanel?.(PANEL); }, 200);
-    setTimeout(() => { if (S.app && !isOpen()) S.app.openRightPanel?.(PANEL); }, 700);
-    return true;
-  }
-  return !!S.app.openFloatingPanel?.(PANEL);
-}
-function openComposite() {
-  S.tab = "layers";
-  if (S.root?.isConnected) render();
-  open();
-  setTimeout(() => $("[data-sec=composite]")?.scrollIntoView({ block: "start" }), 250);
-}
+/** The plugin works in its own full window over GeoLibre (see win.js). */
+function open() { return openWindow(); }
+function openComposite() { openWindow(); winDo("w:comp"); }
 
 export const plugin = {
   id: ID,
@@ -1989,15 +1992,12 @@ export const plugin = {
     // The desktop mounts and unmounts the docked panel in an order a plugin cannot rely on, so keep the floating
     // toolbar in step with the panel by looking every half second (cheap: two DOM checks).
     const watch = setInterval(() => {
-      if (!current()) return;
+      if (!current() || S.win) return;
       if (isOpen()) { if (!S.fl?.isConnected) { bindMap(); renderFloat(); drawOverlay(); } }
       else if (S.fl) { S.fl.remove(); S.fl = null; if (S.tool !== "pan") setTool("pan"); }
     }, 500);
     S.dispose.push(() => clearInterval(watch));
-    const panel = { id: PANEL, title: "Image Classification", icon: ICON, defaultWidth: 420, render: mount, onClose: () => setTool("pan") };
-    S.docked = typeof app.registerRightPanel === "function";
-    const off = S.docked ? app.registerRightPanel(panel) : app.registerFloatingPanel?.({ ...panel, defaultHeight: 720, position: "top-right" });
-    if (typeof off === "function") S.dispose.push(off);
+    S.docked = false;
     const items = [{ id: "open", label: "Image Classification…", icon: ICON, onSelect: open }, { id: "composite", label: "Composite Bands…", icon: ICON, onSelect: openComposite }];
     const offMenu = app.registerMenuContribution?.({ id: `${ID}-processing`, menu: "processing", items });
     if (typeof offMenu === "function") S.dispose.push(offMenu);
@@ -2016,6 +2016,7 @@ export const plugin = {
     for (const s of S.sources) if (s.file) URL.revokeObjectURL(s.url);
     // composites, thresholds and results stay on the map after the plugin goes; their blobs must outlive it
     S.compUrls = [];
+    closeWindow();
     S.root?.remove();
     closeFull();
     Object.assign(S, { root: null, sources: [], stack: null, stackKey: "", reading: null, result: null, app: null });

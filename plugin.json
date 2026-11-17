@@ -1,7 +1,7 @@
 {
   "id": "image-classification",
   "name": "Image Classification",
-  "version": "0.3.1",
+  "version": "0.4.1",
   "entry": "index.js",
   "style": "style.css",
   "description": "Supervised land cover classification of raster layers: pick any bands and spectral indices, draw point, polygon, circle or rectangle training samples on the map with a live spectral profile per class, train Random Forest, Gradient Tree Boost or SVM with a training/testing split, and get overall accuracy, kappa, a confusion matrix, class areas and a classified GeoTIFF.",

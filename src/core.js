@@ -924,3 +924,115 @@ export function stretchLimits(band, nodata) {
   const lo = v[Math.floor(v.length * 0.02)], hi = v[Math.floor(v.length * 0.98)];
   return hi > lo ? [lo, hi] : [lo, lo + 1];
 }
+
+// ---------------------------------------------------------------- unsupervised: K-means and ISODATA
+
+function dist2(X, i, d, c) { let s = 0; for (let j = 0; j < d; j++) { const t = X[i * d + j] - c[j]; s += t * t; } return s; }
+
+/** Lloyd iterations from given centres. Stops when fewer than `tol` of the rows change cluster. */
+async function lloyd(X, n, d, centers0, maxIter, tol, onIter = () => {}) {
+  const centers = centers0.map((c) => c.slice()), labels = new Int32Array(n).fill(-1);
+  let it = 0, changed = 1;
+  for (; it < maxIter && changed > tol; it++) {
+    let moved = 0;
+    for (let i = 0; i < n; i++) {
+      let b = 0, bd = Infinity;
+      for (let k = 0; k < centers.length; k++) { const v = dist2(X, i, d, centers[k]); if (v < bd) { bd = v; b = k; } }
+      if (labels[i] !== b) { moved++; labels[i] = b; }
+    }
+    changed = moved / n;
+    const sum = centers.map(() => new Float64Array(d)), cnt = new Int32Array(centers.length);
+    for (let i = 0; i < n; i++) { const k = labels[i]; cnt[k]++; for (let j = 0; j < d; j++) sum[k][j] += X[i * d + j]; }
+    for (let k = 0; k < centers.length; k++) if (cnt[k]) for (let j = 0; j < d; j++) centers[k][j] = sum[k][j] / cnt[k];
+    onIter(it + 1);
+    await tick();
+  }
+  return { centers, labels, iterations: it, changed };
+}
+
+/** K-means with k-means++ seeding. X is n×d row-major, usually standardised. */
+export async function kmeans(X, n, d, K, opts = {}, onProgress = () => {}) {
+  const o = { maxIter: 30, tol: 0.005, seed: 42, ...opts }, rand = rng(o.seed), first = Math.floor(rand() * n);
+  const centers = [Array.from(X.subarray(first * d, first * d + d))], best = new Float64Array(n).fill(Infinity);
+  while (centers.length < Math.min(K, n)) {
+    const c = centers[centers.length - 1];
+    let tot = 0;
+    for (let i = 0; i < n; i++) { const v = dist2(X, i, d, c); if (v < best[i]) best[i] = v; tot += best[i]; }
+    let r = rand() * tot, pick = n - 1;
+    for (let i = 0; i < n; i++) { r -= best[i]; if (r <= 0) { pick = i; break; } }
+    centers.push(Array.from(X.subarray(pick * d, pick * d + d)));
+  }
+  return lloyd(X, n, d, centers, o.maxIter, o.tol, (it) => onProgress(it / o.maxIter));
+}
+
+/**
+ * ISODATA (Ball & Hall 1965): rounds of K-means in which clusters under `minSize` rows are dropped, a cluster whose
+ * spread in some input exceeds `maxStd` is split in two along it (up to `maxK` clusters), and centres closer than
+ * `minDist` are merged (down to `minK`). Inputs are expected standardised, so maxStd and minDist are in SD units.
+ */
+export async function isodata(X, n, d, K, opts = {}, onProgress = () => {}) {
+  const o = { maxIter: 30, tol: 0.005, seed: 42, minK: Math.max(2, Math.round(K / 2)), maxK: K * 2, minSize: Math.max(20, Math.round(n * 0.005)), maxStd: 1, minDist: 0.5, rounds: 6, ...opts };
+  const per = Math.max(3, Math.round(o.maxIter / o.rounds));
+  let res = await kmeans(X, n, d, K, { ...o, maxIter: per }), total = res.iterations;
+  for (let round = 0; round < o.rounds; round++) {
+    const k0 = res.centers.length, cnt = new Int32Array(k0), sq = res.centers.map(() => new Float64Array(d));
+    for (let i = 0; i < n; i++) { const k = res.labels[i]; cnt[k]++; for (let j = 0; j < d; j++) { const t = X[i * d + j] - res.centers[k][j]; sq[k][j] += t * t; } }
+    let centers = [];
+    for (let k = 0; k < k0; k++) {
+      if (cnt[k] < o.minSize) continue;
+      const sd = Array.from(sq[k], (v) => Math.sqrt(v / cnt[k])), j = sd.indexOf(Math.max(...sd)), c = res.centers[k];
+      if (sd[j] > o.maxStd && centers.length + (k0 - k) < o.maxK) { const a = c.slice(), b = c.slice(); a[j] += sd[j] / 2; b[j] -= sd[j] / 2; centers.push(a, b); }
+      else centers.push(c.slice());
+    }
+    for (let merged = true; merged && centers.length > o.minK;) {
+      merged = false;
+      for (let a = 0; a < centers.length && !merged; a++) for (let b = a + 1; b < centers.length && !merged; b++) {
+        let s = 0; for (let j = 0; j < d; j++) s += (centers[a][j] - centers[b][j]) ** 2;
+        if (Math.sqrt(s) < o.minDist) { centers[a] = centers[a].map((v, j) => (v + centers[b][j]) / 2); centers.splice(b, 1); merged = true; }
+      }
+    }
+    if (!centers.length) break;
+    const next = await lloyd(X, n, d, centers, per, o.tol);
+    total += next.iterations;
+    onProgress((round + 1) / o.rounds);
+    const stable = next.centers.length === res.centers.length && next.changed <= o.tol;
+    res = next;
+    if (stable) break;
+  }
+  return { ...res, iterations: total };
+}
+
+/** Index of the nearest centre to the row of x starting at `off`. */
+export function nearestCenter(x, off, d, centers) {
+  let b = 0, bd = Infinity;
+  for (let k = 0; k < centers.length; k++) { let s = 0; for (let j = 0; j < d; j++) { const t = x[off + j] - centers[k][j]; s += t * t; } if (s < bd) { bd = s; b = k; } }
+  return b;
+}
+
+// ---------------------------------------------------------------- statistics
+
+/** Pearson correlation between layers over the cells listed. */
+export function correlation(layers, cells) {
+  const d = layers.length, n = cells.length, mu = new Float64Array(d);
+  for (let j = 0; j < d; j++) { let s = 0; for (const c of cells) s += layers[j][c]; mu[j] = s / n; }
+  const R = Array.from({ length: d }, () => new Array(d).fill(0));
+  for (let a = 0; a < d; a++) for (let b = a; b < d; b++) {
+    let sab = 0, sa = 0, sb = 0;
+    for (const c of cells) { const x = layers[a][c] - mu[a], y = layers[b][c] - mu[b]; sab += x * y; sa += x * x; sb += y * y; }
+    R[a][b] = R[b][a] = sa && sb ? sab / Math.sqrt(sa * sb) : 0;
+  }
+  return R;
+}
+
+/** Area (m²) moving from each class of `a` (rows) to each class of `b` (columns); both rasters on `grid`. */
+export function transitions(a, b, grid, codes) {
+  const [w, s, e, n] = grid.bounds, dx = (e - w) / grid.width, dy = (n - s) / grid.height, R = 6371008.8, rad = Math.PI / 180;
+  const ix = new Int16Array(256).fill(-1);
+  codes.forEach((c, i) => (ix[c] = i));
+  const K = codes.length, T = Array.from({ length: K }, () => new Float64Array(K));
+  for (let y = 0; y < grid.height; y++) {
+    const lat = n - (y + 0.5) * dy, area = grid.geographic ? dx * rad * R * Math.cos(lat * rad) * dy * rad * R : dx * dy;
+    for (let x = 0, k = y * grid.width; x < grid.width; x++, k++) { const i = ix[a[k]], j = ix[b[k]]; if (i >= 0 && j >= 0) T[i][j] += area; }
+  }
+  return T.map((r) => Array.from(r));
+}
