@@ -30,9 +30,10 @@ A [GeoLibre](https://geolibre.app) plugin for land cover classification of satel
 | Display | RGB composite (True colour, False colour, Burn scar, SWIR, Agriculture presets, or any bands), single band, index, your own expression. Band labels by number (B11 B8 B3) or name (SWIR1 NIR Green) |
 | Samples | Point, polygon, circle, rectangle (drag or two clicks). The image pans only with the hand tool. Import from a vector layer, save as a layer |
 | Supervised | Random Forest, Gradient Tree Boost, SVM (RBF, linear, polynomial, sigmoid), optional *Balance classes* |
+| GPU | The image is classified on the graphics card through WebGPU (RF, GTB, SVM), with the same labels as the CPU; falls back to the CPU where WebGPU is missing |
 | Unsupervised | K-means (k-means++ seeding), ISODATA (split, merge, drop clusters), then label clusters as classes |
 | Accuracy | Confusion matrix, OA, kappa, PA, UA, F1, OOB (RF), area-based accuracy with standard errors |
-| Charts | White cards (also in dark mode): matplotlib-style confusion matrix, class areas, variable importance, journal-style spectral profile, seaborn-style correlation heatmap |
+| Charts | White cards (also in dark mode): matplotlib-style confusion matrix, class areas, variable importance, journal-style spectral profile, index values per class (mean ± SD), seaborn-style correlation heatmap |
 | Land cover change | Apply the model to an image from another date, then change matrix (ha), Sankey diagram, gains and losses |
 | Post-processing | Majority smoothing 3×3 / 5×5, conversion to polygons (dissolved per class) |
 | Export | Straight to a folder on your computer: paletted GeoTIFF, GeoJSON, XLSX, CSV, charts as 300 dpi PNG and SVG |
@@ -98,6 +99,7 @@ Tip: draw several small, spread-out boxes per class rather than one large box, o
 | Max pixels per sample | 500 | keeps large polygons from dominating |
 | Balance classes | off | class weights inversely proportional to class frequency |
 | Seed | 42 | runs are repeatable |
+| Use GPU | on | classifies the image's pixels with WebGPU; training stays on the CPU |
 
 Press **Run classification**. The result appears on the map, in the left dock under **Results**, and in **4 Results**: OA, kappa, area per class, number of patches.
 
@@ -107,7 +109,7 @@ Press **Run classification**. The result appears on the map, in the left dock un
 
 ![Accuracy tab](docs/img/readme/07-accuracy.png)
 
-**Charts** tab: every card has a Chart/Table switch, downloads (CSV, XLSX, 300 dpi PNG, SVG) and full screen.
+**Charts** tab: every card has a Chart/Table switch, downloads (CSV, XLSX, 300 dpi PNG, SVG) and full screen. **Index values per class** gives the mean ± 1 SD of every selected index over the sample pixels of each class, one panel per index.
 
 ![Charts tab](docs/img/readme/04-charts.png)
 
@@ -166,6 +168,20 @@ In the example, about 1,295 ha of pre-fire forest became burned area; burned are
 | `F5` | run classification / clustering |
 | `Ctrl+E` | export to a folder |
 | `Esc` | cancel an unfinished shape, close a dialog |
+
+### Speed and the GPU
+
+Training uses only the sample pixels and stays on the CPU. Predicting every pixel of the image is the slow part, and each pixel is independent, so with **Use GPU** on (3 Model) it runs as a WebGPU compute shader: one shader walks the RF or GTB trees, another evaluates the one-vs-one SVM. The labels are the same as on the CPU. The **Log** tab records the grid size, pixel count, in-memory stack size, which device classified the image and how long it took.
+
+Measured in web.geolibre.app on a laptop with Intel Iris Xe graphics:
+
+| Test | GPU | CPU |
+|---|---|---|
+| 1,000,000 pixels × 18 inputs, RF 500 trees | 1.1 s | 24.8 s |
+| Sentinel-2 Sembilang, 2,506 × 2,507 px (6.28 M px), 11 bands + 7 indices (431 MB), RF 500 trees: classifying the image | 9.1 s | 3 min 43 s |
+| Same model applied to a second image of 2,115 × 2,115 px (whole step, reading the bands included) | 24 s | 47 s |
+
+WebGPU is in Chrome and Edge; GeoLibre Desktop on Windows runs on WebView2, which has it too (not tested with this plugin yet). Where it is missing, or a GPU call fails part-way, the plugin finishes on the CPU and the log says so.
 
 ## Methods and formulas
 
@@ -357,6 +373,7 @@ Needs Node.js. `npm install` once fetches esbuild.
 npm install
 node build.mjs                      # plugin/ and image-classification-<version>.zip
 node test/apply.mjs                 # band matching for another image, reflectance scale guess
+node test/gpu-pack.mjs              # GPU model layout predicts what the model predicts (RF, GTB, 4 SVM kernels)
 node test/unsup.mjs                 # K-means, ISODATA, correlation, change matrix
 node test/post.mjs                  # smoothing and polygonisation
 node test/weda.mjs <stack.json> <stack.u16> <samples dir> <out.tif>   # core on a real Sentinel-2 stack

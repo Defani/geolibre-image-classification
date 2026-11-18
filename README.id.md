@@ -30,9 +30,10 @@ Plugin [GeoLibre](https://geolibre.app) untuk klasifikasi tutupan lahan dari cit
 | Tampilan | Komposit RGB (preset True colour, False colour, Burn scar, SWIR, Agriculture, atau bebas), band tunggal, indeks, ekspresi sendiri. Nama band bisa nomor (B11 B8 B3) atau nama (SWIR1 NIR Green) |
 | Sampel | Titik, poligon, lingkaran, persegi (tarik atau dua klik). Geser citra hanya dengan ikon tangan. Impor dari layer vektor, simpan sebagai layer |
 | Terbimbing | Random Forest, Gradient Tree Boost, SVM (RBF, linear, polinomial, sigmoid), opsi *Balance classes* |
+| GPU | Citra diklasifikasi di kartu grafis lewat WebGPU (RF, GTB, SVM), hasil labelnya sama dengan CPU; kembali ke CPU bila WebGPU tidak ada |
 | Tak terbimbing | K-means (inisialisasi k-means++), ISODATA (pecah, gabung, buang klaster), lalu labeli klaster menjadi kelas |
 | Akurasi | Confusion matrix, OA, kappa, PA, UA, F1, OOB (RF), akurasi berbasis luas dengan galat baku |
-| Grafik | Kartu putih (juga di mode gelap): confusion matrix gaya matplotlib, luas kelas, pentingnya variabel, spectral profile gaya jurnal, heatmap korelasi gaya seaborn |
+| Grafik | Kartu putih (juga di mode gelap): confusion matrix gaya matplotlib, luas kelas, pentingnya variabel, spectral profile gaya jurnal, nilai indeks per kelas (rata-rata ± SD), heatmap korelasi gaya seaborn |
 | Perubahan lahan | Terapkan model ke citra tanggal lain, lalu change matrix (ha), diagram Sankey, gains/losses |
 | Pasca-proses | Smoothing majority 3×3 / 5×5, konversi ke poligon (dissolve per kelas) |
 | Ekspor | Langsung ke folder di komputer: GeoTIFF berpalet, GeoJSON, XLSX, CSV, grafik PNG 300 dpi dan SVG |
@@ -98,6 +99,7 @@ Tips sampel: gambar beberapa kotak kecil yang tersebar untuk setiap kelas, bukan
 | Max pixels per sample | 500 | membatasi dominasi poligon besar |
 | Balance classes | mati | bobot kelas berbanding terbalik dengan frekuensinya |
 | Seed | 42 | hasil bisa diulang |
+| Use GPU | nyala | piksel citra diklasifikasi dengan WebGPU; training tetap di CPU |
 
 Klik **Run classification**. Hasilnya muncul di peta, di dock kiri **Results**, dan di **4 Results**: OA, kappa, luas per kelas, jumlah patch.
 
@@ -107,7 +109,7 @@ Tab **Accuracy**: OA, kappa, OOB, akurasi berbasis luas ±95 % CI, dan confusion
 
 ![Tab Accuracy](docs/img/readme/07-accuracy.png)
 
-Tab **Charts**: setiap kartu punya tombol Grafik/Tabel, unduh (CSV, XLSX, PNG 300 dpi, SVG), dan layar penuh.
+Tab **Charts**: setiap kartu punya tombol Grafik/Tabel, unduh (CSV, XLSX, PNG 300 dpi, SVG), dan layar penuh. **Index values per class** menampilkan rata-rata ± 1 SD tiap indeks yang dipilih pada piksel sampel tiap kelas, satu panel per indeks.
 
 ![Tab Charts](docs/img/readme/04-charts.png)
 
@@ -166,6 +168,20 @@ Pada data contoh, sekitar 1.295 ha hutan sebelum kebakaran menjadi area terbakar
 | `F5` | jalankan klasifikasi / clustering |
 | `Ctrl+E` | ekspor ke folder |
 | `Esc` | batalkan gambar yang belum selesai, tutup dialog |
+
+### Kecepatan dan GPU
+
+Training hanya memakai piksel sampel dan tetap di CPU. Bagian yang lambat adalah memprediksi setiap piksel citra, dan tiap piksel berdiri sendiri, jadi dengan **Use GPU** menyala (3 Model) prediksi berjalan sebagai compute shader WebGPU: satu shader menelusuri pohon RF atau GTB, satu lagi menghitung SVM one-vs-one. Labelnya sama dengan hasil CPU. Tab **Log** mencatat ukuran grid, jumlah piksel, ukuran stack di memori, perangkat yang mengklasifikasi citra, dan lamanya.
+
+Diukur di web.geolibre.app pada laptop dengan grafis Intel Iris Xe:
+
+| Uji | GPU | CPU |
+|---|---|---|
+| 1.000.000 piksel × 18 input, RF 500 pohon | 1,1 s | 24,8 s |
+| Sentinel-2 Sembilang, 2.506 × 2.507 px (6,28 juta px), 11 band + 7 indeks (431 MB), RF 500 pohon: klasifikasi citra | 9,1 s | 3 mnt 43 s |
+| Model yang sama diterapkan ke citra kedua 2.115 × 2.115 px (seluruh langkah, termasuk membaca band) | 24 s | 47 s |
+
+WebGPU ada di Chrome dan Edge; GeoLibre Desktop di Windows berjalan di WebView2 yang juga mendukungnya (belum diuji dengan plugin ini). Bila tidak ada, atau panggilan GPU gagal di tengah jalan, plugin menyelesaikannya di CPU dan log mencatatnya.
 
 ## Metode dan rumus
 
@@ -357,6 +373,7 @@ Butuh Node.js. Jalankan `npm install` sekali untuk mengambil esbuild.
 npm install
 node build.mjs                      # plugin/ dan image-classification-<versi>.zip
 node test/apply.mjs                 # pencocokan band untuk citra lain, tebakan skala reflektansi
+node test/gpu-pack.mjs              # tata letak model untuk GPU memprediksi sama dengan modelnya (RF, GTB, 4 kernel SVM)
 node test/unsup.mjs                 # K-means, ISODATA, korelasi, change matrix
 node test/post.mjs                  # smoothing dan poligonisasi
 node test/weda.mjs <stack.json> <stack.u16> <folder sampel> <out.tif>   # inti pada stack Sentinel-2 nyata
