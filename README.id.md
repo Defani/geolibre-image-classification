@@ -33,7 +33,7 @@ Plugin [GeoLibre](https://geolibre.app) untuk klasifikasi tutupan lahan dari cit
 | GPU | Citra diklasifikasi di kartu grafis lewat WebGPU (RF, GTB, SVM), hasil labelnya sama dengan CPU; kembali ke CPU bila WebGPU tidak ada |
 | Tak terbimbing | K-means (inisialisasi k-means++), ISODATA (pecah, gabung, buang klaster), lalu labeli klaster menjadi kelas |
 | Akurasi | Confusion matrix, OA, kappa, PA, UA, F1, OOB (RF), akurasi berbasis luas dengan galat baku |
-| Grafik | Kartu putih (juga di mode gelap): confusion matrix gaya matplotlib, luas kelas, pentingnya variabel, spectral profile gaya jurnal, nilai indeks per kelas (rata-rata ± SD), heatmap korelasi gaya seaborn |
+| Grafik | Kartu putih (juga di mode gelap): confusion matrix gaya matplotlib, luas kelas, pentingnya variabel, spectral profile gaya jurnal, nilai indeks per kelas (rata-rata ± SD), heatmap korelasi gaya seaborn; setiap heatmap punya pilihan palet (Blues, Greens, viridis, magma … untuk matriks; coolwarm, RdBu, PiYG, BrBG … untuk korelasi) |
 | Perubahan lahan | Terapkan model ke citra tanggal lain, lalu change matrix (ha), diagram Sankey, gains/losses |
 | Pasca-proses | Smoothing majority 3×3 / 5×5, konversi ke poligon (dissolve per kelas) |
 | Ekspor | Langsung ke folder di komputer: GeoTIFF berpalet, GeoJSON, XLSX, CSV, grafik PNG 300 dpi dan SVG |
@@ -95,7 +95,7 @@ Tips sampel: gambar beberapa kotak kecil yang tersebar untuk setiap kelas, bukan
 | RF | 500 pohon, min leaf 1, bag 0,5, √d variabel per split | |
 | GTB | 200 pohon, shrinkage 0,05, sampling 0,7, 5 node | |
 | SVM | RBF, C = 10, γ = 0,5 | γ dibagi jumlah input setelah standardisasi |
-| Split | 70 % latih / 30 % uji, per piksel atau per sampel | per sampel lebih jujur bila sampel berdekatan |
+| Split | 70 % latih / 30 % uji, per sampel (default) atau per piksel | per sampel menaruh setiap poligon utuh di satu sisi, jadi piksel uji tidak bersebelahan dengan piksel latih dari poligon yang sama. Untuk titik keduanya sama |
 | Max pixels per sample | 500 | membatasi dominasi poligon besar |
 | Balance classes | mati | bobot kelas berbanding terbalik dengan frekuensinya |
 | Seed | 42 | hasil bisa diulang |
@@ -119,9 +119,13 @@ Tab **Charts**: setiap kartu punya tombol Grafik/Tabel, unduh (CSV, XLSX, PNG 30
 
 ![Heatmap korelasi input](docs/img/readme/06-correlation.png)
 
+**Cara akurasi diukur.** Piksel uji adalah bagian sampel yang tidak dipakai untuk training (default 30 %), lalu masing-masing dicocokkan dengan kelas yang diberikan peta akhir. Piksel yang berada di dalam sampel dua kelas berbeda adalah kontradiksi; piksel itu dikeluarkan dari training dan uji, dan tab Results menyebutkan jumlahnya. Kelas yang hanya punya satu sampel tidak bisa di-split per sampel, jadi pikselnya di-split per piksel, dan tab Results menyebutkan kelas itu.
+
+Ingat bahwa piksel uji berasal dari sampel yang sama dengan piksel latih. Bila sampel hanya diletakkan di piksel yang jelas dan khas, akurasi akan tinggi (sering mendekati 100 %) karena ujinya mudah, bukan karena petanya sebagus itu. Untuk angka yang bisa dilaporkan, beri label pada titik acak independen di atas peta (terstratifikasi per kelas peta) lalu bandingkan dengan peta; estimasi berbasis luas Olofsson dkk. (2014) hanya sahih untuk sampel acak seperti itu.
+
 ### 5. Smoothing dan poligon
 
-Di **4 Results → Smoothing** pilih Majority 3 × 3 atau 5 × 5 (luas dan grafik ikut diperbarui; akurasi tetap dari model). **Convert to polygons** menambahkan layer GeoLibre berisi satu MultiPolygon per kelas dengan kolom `class_code`, `class_name`, `area_ha`, `patches`, `color`.
+Di **4 Results → Smoothing** pilih Majority 3 × 3 atau 5 × 5 (luas, grafik, dan akurasi ikut diperbarui: piksel uji dibaca dari peta akhir, jadi akurasi selalu menggambarkan peta yang diekspor). **Convert to polygons** menambahkan layer GeoLibre berisi satu MultiPolygon per kelas dengan kolom `class_code`, `class_name`, `area_ha`, `patches`, `color`.
 
 ### 6. Before/after dan perubahan lahan
 
@@ -378,6 +382,8 @@ npm install
 node build.mjs                      # plugin/ dan image-classification-<versi>.zip
 node test/apply.mjs                 # pencocokan band untuk citra lain, tebakan skala reflektansi
 node test/gpu-pack.mjs              # tata letak model untuk GPU memprediksi sama dengan modelnya (RF, GTB, 4 kernel SVM)
+node test/accuracy.mjs              # sampel bertentangan, split per sampel, akurasi peta akhir
+node test/palettes.mjs              # palet heatmap
 node test/unsup.mjs                 # K-means, ISODATA, korelasi, change matrix
 node test/post.mjs                  # smoothing dan poligonisasi
 node test/weda.mjs <stack.json> <stack.u16> <folder sampel> <out.tif>   # inti pada stack Sentinel-2 nyata

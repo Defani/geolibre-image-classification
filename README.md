@@ -33,7 +33,7 @@ A [GeoLibre](https://geolibre.app) plugin for land cover classification of satel
 | GPU | The image is classified on the graphics card through WebGPU (RF, GTB, SVM), with the same labels as the CPU; falls back to the CPU where WebGPU is missing |
 | Unsupervised | K-means (k-means++ seeding), ISODATA (split, merge, drop clusters), then label clusters as classes |
 | Accuracy | Confusion matrix, OA, kappa, PA, UA, F1, OOB (RF), area-based accuracy with standard errors |
-| Charts | White cards (also in dark mode): matplotlib-style confusion matrix, class areas, variable importance, journal-style spectral profile, index values per class (mean ± SD), seaborn-style correlation heatmap |
+| Charts | White cards (also in dark mode): matplotlib-style confusion matrix, class areas, variable importance, journal-style spectral profile, index values per class (mean ± SD), seaborn-style correlation heatmap; each heatmap has a palette picker (Blues, Greens, viridis, magma … for matrices; coolwarm, RdBu, PiYG, BrBG … for correlation) |
 | Land cover change | Apply the model to an image from another date, then change matrix (ha), Sankey diagram, gains and losses |
 | Post-processing | Majority smoothing 3×3 / 5×5, conversion to polygons (dissolved per class) |
 | Export | Straight to a folder on your computer: paletted GeoTIFF, GeoJSON, XLSX, CSV, charts as 300 dpi PNG and SVG |
@@ -95,7 +95,7 @@ Tip: draw several small, spread-out boxes per class rather than one large box, o
 | RF | 500 trees, min leaf 1, bag 0.5, √d variables per split | |
 | GTB | 200 trees, shrinkage 0.05, sampling 0.7, 5 nodes | |
 | SVM | RBF, C = 10, γ = 0.5 | γ is divided by the number of inputs after standardising |
-| Split | 70 % training / 30 % testing, by pixel or by sample | by sample is more honest when samples are close together |
+| Split | 70 % training / 30 % testing, by sample (default) or by pixel | by sample keeps every polygon wholly on one side, so test pixels never sit next to training pixels of the same polygon. For points the two are the same |
 | Max pixels per sample | 500 | keeps large polygons from dominating |
 | Balance classes | off | class weights inversely proportional to class frequency |
 | Seed | 42 | runs are repeatable |
@@ -119,9 +119,13 @@ Press **Run classification**. The result appears on the map, in the left dock un
 
 ![Input correlation heatmap](docs/img/readme/06-correlation.png)
 
+**How the accuracy is measured.** The test pixels are the share of your samples held back from training (30 % by default), and each is checked against the class the finished map gives it. A pixel that lies inside samples of two different classes is a contradiction; it is left out of both training and testing, and the Results tab says how many. A class with only one sample cannot be split by sample, so its pixels are split by pixel, and the Results tab names that class.
+
+Keep in mind that test pixels come from the same samples as the training pixels. When samples sit only on clear, typical pixels, the accuracy will be high (often close to 100 %) because the test is easy, not because the map is that good. For a figure you can report, label an independent set of random points over the map (stratified by map class) and compare those with the map; the area-weighted estimates of Olofsson et al. (2014) are valid only for such a random sample.
+
 ### 5. Smoothing and polygons
 
-In **4 Results → Smoothing** choose Majority 3 × 3 or 5 × 5 (areas and charts update; accuracy stays that of the model). **Convert to polygons** adds a GeoLibre layer with one MultiPolygon per class and the fields `class_code`, `class_name`, `area_ha`, `patches`, `color`.
+In **4 Results → Smoothing** choose Majority 3 × 3 or 5 × 5 (areas, charts and accuracy update: test pixels are read from the finished map, so the accuracy always describes the map you export). **Convert to polygons** adds a GeoLibre layer with one MultiPolygon per class and the fields `class_code`, `class_name`, `area_ha`, `patches`, `color`.
 
 ### 6. Before/after and land cover change
 
@@ -378,6 +382,8 @@ npm install
 node build.mjs                      # plugin/ and image-classification-<version>.zip
 node test/apply.mjs                 # band matching for another image, reflectance scale guess
 node test/gpu-pack.mjs              # GPU model layout predicts what the model predicts (RF, GTB, 4 SVM kernels)
+node test/accuracy.mjs              # conflicting samples, split by sample, accuracy of the finished map
+node test/palettes.mjs              # heatmap palettes
 node test/unsup.mjs                 # K-means, ISODATA, correlation, change matrix
 node test/post.mjs                  # smoothing and polygonisation
 node test/weda.mjs <stack.json> <stack.u16> <samples dir> <out.tif>   # core on a real Sentinel-2 stack

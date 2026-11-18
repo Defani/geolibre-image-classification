@@ -465,12 +465,12 @@ function drawViewer() {
 function matrixSvg(id, o) {
   const K = o.rows.length, side = Math.min(360, Math.max(200, K * 56)), cs = side / K, L = 30 + Math.max(...o.rowNames.map((n) => tw(n, 11))), T = o.title ? 40 : 14, ex = 14 + 0.6 * Math.max(...o.colNames.map((n) => tw(n, 11))), W = L + side + 96, H = T + side + ex + 34;
   const vmax = o.vmax ?? Math.max(1, ...o.rows.flat()), x0 = L, y0 = T;
-  let s = svgOpen(id, W, H, o.title || o.label) + `<defs><linearGradient id="${id}-cb" x1="0" x2="0" y1="1" y2="0">${HEAT_STOPS.map((c, i) => `<stop offset="${(i / (HEAT_STOPS.length - 1)).toFixed(3)}" stop-color="${c}"/>`).join("")}</linearGradient></defs>`;
+  let s = svgOpen(id, W, H, o.title || o.label) + `<defs><linearGradient id="${id}-cb" x1="0" x2="0" y1="1" y2="0">${palStops(id).map((c, i, a) => `<stop offset="${(i / (a.length - 1)).toFixed(3)}" stop-color="${c}"/>`).join("")}</linearGradient></defs>`;
   if (o.title) s += `<text x="${x0 + side / 2}" y="20" text-anchor="middle" font-size="16" fill="#111827">${esc(o.title)}</text>`;
   o.rows.forEach((r, i) => r.forEach((v, j) => {
     const t = Math.min(1, (o.share ? v / (r.reduce((a, b) => a + b, 0) || 1) : v / vmax)), x = x0 + j * cs, y = y0 + i * cs;
-    s += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${cs.toFixed(1)}" height="${cs.toFixed(1)}" fill="${blues(t)}"/>`;
-    s += `<text x="${(x + cs / 2).toFixed(1)}" y="${(y + cs / 2).toFixed(1)}" text-anchor="middle" dominant-baseline="central" font-size="${cs > 50 ? 13 : 11}" fill="${t > 0.5 ? "#ffffff" : "#111827"}">${esc(o.fmt ? o.fmt(v) : nf(v))}</text>`;
+    s += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${cs.toFixed(1)}" height="${cs.toFixed(1)}" fill="${blues(t, id)}"/>`;
+    s += `<text x="${(x + cs / 2).toFixed(1)}" y="${(y + cs / 2).toFixed(1)}" text-anchor="middle" dominant-baseline="central" font-size="${cs > 50 ? 13 : 11}" fill="${inkOn(blues(t, id))}">${esc(o.fmt ? o.fmt(v) : nf(v))}</text>`;
   }));
   for (let i = 0; i < K; i++) {
     const c = x0 + (i + 0.5) * cs, r = y0 + (i + 0.5) * cs;
@@ -487,24 +487,49 @@ function matrixSvg(id, o) {
   s += `<text transform="translate(${W - 8},${y0 + side / 2}) rotate(-90)" text-anchor="middle" font-size="11" fill="#111827">${esc(o.cbLabel)}</text>`;
   return s + svgClose(id);
 }
-const HEAT_STOPS = ["#f7fbff", "#deebf7", "#c6dbef", "#9ecae1", "#6baed6", "#4292c6", "#2171b5", "#08519c", "#08306b"];
-function blues(t) {
-  const C = HEAT_STOPS.map(hexToRgb), x = Math.max(0, Math.min(1, t)) * (C.length - 1), i = Math.min(C.length - 2, Math.floor(x)), f = x - i;
+/** Heatmap palettes (matplotlib / ColorBrewer stops). Sequential for counts and shares, diverging for −1 … 1. */
+const PALETTES = {
+  seq: {
+    Blues: ["#f7fbff", "#deebf7", "#c6dbef", "#9ecae1", "#6baed6", "#4292c6", "#2171b5", "#08519c", "#08306b"],
+    Greens: ["#f7fcf5", "#e5f5e0", "#c7e9c0", "#a1d99b", "#74c476", "#41ab5d", "#238b45", "#006d2c", "#00441b"],
+    Oranges: ["#fff5eb", "#fee6ce", "#fdd0a2", "#fdae6b", "#fd8d3c", "#f16913", "#d94801", "#a63603", "#7f2704"],
+    Purples: ["#fcfbfd", "#efedf5", "#dadaeb", "#bcbddc", "#9e9ac8", "#807dba", "#6a51a3", "#54278f", "#3f007d"],
+    Reds: ["#fff5f0", "#fee0d2", "#fcbba1", "#fc9272", "#fb6a4a", "#ef3b2c", "#cb181d", "#a50f15", "#67000d"],
+    Greys: ["#ffffff", "#f0f0f0", "#d9d9d9", "#bdbdbd", "#969696", "#737373", "#525252", "#252525", "#000000"],
+    YlGnBu: ["#ffffd9", "#edf8b1", "#c7e9b4", "#7fcdbb", "#41b6c4", "#1d91c0", "#225ea8", "#253494", "#081d58"],
+    viridis: ["#440154", "#472d7b", "#3b528b", "#2c728e", "#21918c", "#28ae80", "#5ec962", "#addc30", "#fde725"],
+    magma: ["#000004", "#180f3d", "#440f76", "#721f81", "#9e2f7f", "#cd4071", "#f1605d", "#fd9668", "#fcfdbf"],
+  },
+  div: {
+    coolwarm: ["#3b4cc0", "#8db0fe", "#dddcdc", "#f49a7b", "#b40426"],
+    RdBu: ["#2166ac", "#67a9cf", "#d1e5f0", "#f7f7f7", "#fddbc7", "#ef8a62", "#b2182b"],
+    PiYG: ["#4d9221", "#a1d76a", "#e6f5d0", "#f7f7f7", "#fde0ef", "#e9a3c9", "#c51b7d"],
+    BrBG: ["#01665e", "#5ab4ac", "#c7eae5", "#f5f5f5", "#f6e8c3", "#d8b365", "#8c510a"],
+    PuOr: ["#542788", "#998ec3", "#d8daeb", "#f7f7f7", "#fee0b6", "#f1a340", "#b35806"],
+    Spectral: ["#3288bd", "#99d594", "#e6f598", "#ffffbf", "#fee08b", "#fc8d59", "#d53e4f"],
+  },
+};
+S.pal = { matrix: "Blues", change: "Blues", corr: "coolwarm" };
+const palStops = (id) => { const kind = id === "corr" ? "div" : "seq"; return PALETTES[kind][S.pal[id]] ?? Object.values(PALETTES[kind])[0]; };
+function ramp(stops, t) {
+  const C = stops.map(hexToRgb), x = Math.max(0, Math.min(1, t)) * (C.length - 1), i = Math.min(C.length - 2, Math.floor(x)), f = x - i;
   return "rgb(" + C[i].map((c, q) => Math.round(c + (C[i + 1][q] - c) * f)).join(",") + ")";
 }
-const COOL = ["#3b4cc0", "#8db0fe", "#dddcdc", "#f49a7b", "#b40426"];
-function coolwarm(r) {
-  const C = COOL.map(hexToRgb), x = ((Math.max(-1, Math.min(1, r)) + 1) / 2) * (C.length - 1), i = Math.min(C.length - 2, Math.floor(x)), f = x - i;
-  return "rgb(" + C[i].map((c, q) => Math.round(c + (C[i + 1][q] - c) * f)).join(",") + ")";
+/** Black or white text, whichever reads better on the cell colour (relative luminance). */
+function inkOn(rgb) {
+  const [r, g, b] = rgb.match(/\d+/g).map(Number).map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.36 ? "#111827" : "#ffffff";
 }
+const blues = (t, id = "matrix") => ramp(palStops(id), t);
+const coolwarm = (v) => ramp(palStops("corr"), (Math.max(-1, Math.min(1, v)) + 1) / 2);
 /** seaborn-style annotated correlation heatmap (coolwarm, −1 … 1). */
 function corrSvg(id, names, R) {
   const K = names.length, side = Math.min(480, Math.max(240, K * 40)), cs = side / K, L = 20 + Math.max(...names.map((n) => tw(n, 11))), W = L + side + 80, H = 14 + side + 20 + Math.max(...names.map((n) => tw(n, 11)));
-  let s = svgOpen(id, W, H, "Input correlation") + `<defs><linearGradient id="${id}-cb" x1="0" x2="0" y1="1" y2="0">${COOL.map((c, i) => `<stop offset="${i / (COOL.length - 1)}" stop-color="${c}"/>`).join("")}</linearGradient></defs>`;
+  let s = svgOpen(id, W, H, "Input correlation") + `<defs><linearGradient id="${id}-cb" x1="0" x2="0" y1="1" y2="0">${palStops("corr").map((c, i, a) => `<stop offset="${i / (a.length - 1)}" stop-color="${c}"/>`).join("")}</linearGradient></defs>`;
   R.forEach((r, i) => r.forEach((v, j) => {
     const x = L + j * cs, y = 10 + i * cs;
     s += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${cs.toFixed(1)}" height="${cs.toFixed(1)}" fill="${coolwarm(v)}"/>`;
-    s += `<text x="${(x + cs / 2).toFixed(1)}" y="${(y + cs / 2).toFixed(1)}" text-anchor="middle" dominant-baseline="central" font-size="${cs > 36 ? 11 : 9}" fill="${Math.abs(v) > 0.7 ? "#ffffff" : "#111827"}">${Math.abs(v - 1) < 1e-9 ? "1" : v.toFixed(2).replace(/^(-?)0\./, "$1.")}</text>`;
+    s += `<text x="${(x + cs / 2).toFixed(1)}" y="${(y + cs / 2).toFixed(1)}" text-anchor="middle" dominant-baseline="central" font-size="${cs > 36 ? 11 : 9}" fill="${inkOn(coolwarm(v))}">${Math.abs(v - 1) < 1e-9 ? "1" : v.toFixed(2).replace(/^(-?)0\./, "$1.")}</text>`;
   }));
   names.forEach((nm, i) => {
     const c = L + (i + 0.5) * cs, r = 10 + (i + 0.5) * cs;
@@ -637,6 +662,7 @@ function buildCards(r) {
     const nm = (c) => r.classes.find((x) => x.code === c)?.name ?? "Class " + c, a = r.accTest;
     if (a) S.cards.matrix = {
       title: "Confusion matrix", chartLabel: "Heatmap", file: "confusion_matrix",
+      palettes: Object.keys(PALETTES.seq),
       chart: () => matrixSvg("matrix", { title: S.exporting ? "Confusion Matrix" : "", rows: a.matrix, rowNames: r.codes.map(nm), colNames: r.codes.map(nm), xLabel: "Predicted label", yLabel: "True label", cbLabel: "Number of pixels" }),
       table: () => `<table class="icl-table"><thead><tr><th>True \\ Predicted</th>${r.codes.map((c) => `<th>${esc(nm(c))}</th>`).join("")}<th>PA %</th></tr></thead><tbody>${a.matrix.map((row, k) => `<tr><td>${esc(nm(r.codes[k]))}</td>${row.map((v, j) => `<td${j === k ? ' class="d"' : ""}>${nf(v)}</td>`).join("")}<td>${pct(a.pa[k])}</td></tr>`).join("")}<tr><td>UA %</td>${a.ua.map((v) => `<td>${pct(v)}</td>`).join("")}<td></td></tr></tbody></table>`,
       sheets: () => accuracySheets(r),
@@ -713,7 +739,7 @@ async function computeStats() {
     if (valid.length > 50 && fc.layers.length > 1) {
       const R = correlation(fc.layers, valid), names = fc.names.map(n0);
       S.cards.corr = {
-        title: "Input correlation", chartLabel: "Heatmap", file: "input_correlation", chart: () => corrSvg("corr", names, R),
+        title: "Input correlation", chartLabel: "Heatmap", file: "input_correlation", palettes: Object.keys(PALETTES.div), chart: () => corrSvg("corr", names, R),
         table: () => `<table class="icl-table"><thead><tr><th></th>${names.map((x) => `<th>${esc(x)}</th>`).join("")}</tr></thead><tbody>${R.map((r, i) => `<tr><td>${esc(names[i])}</td>${r.map((v) => `<td>${v.toFixed(2)}</td>`).join("")}</tr>`).join("")}</tbody></table>`,
         sheets: () => [{ name: "Correlation", rows: [["", ...names.map((x) => ({ v: x, bold: true }))], ...R.map((r, i) => [{ v: names[i], bold: true }, ...r.map((v) => +v.toFixed(4))])] }],
         note: `Pearson r over ${nf(valid.length)} random pixels. Pairs near ±1 carry the same information.`,
@@ -765,6 +791,7 @@ function changeView() {
   const gi = delta.indexOf(Math.max(...delta)), li = delta.indexOf(Math.min(...delta));
   S.cards.change = {
     title: "Change matrix", chartLabel: "Heatmap", file: "change_matrix",
+    palettes: Object.keys(PALETTES.seq),
     chart: () => matrixSvg("change", { title: S.exporting ? "Change matrix (ha)" : "", rows: T, rowNames: names, colNames: names, xLabel: B.name, yLabel: A.name, cbLabel: "Share of the earlier class", share: true, fmt: (v) => (v > 0 && v < 1 ? "<1" : nf(v)) }),
     table: () => `<table class="icl-table"><thead><tr><th>From \\ To (ha)</th>${names.map((x) => `<th>${esc(x)}</th>`).join("")}<th>Total</th></tr></thead><tbody>${T.map((r, i) => `<tr><td>${esc(names[i])}</td>${r.map((v, j) => `<td${i === j ? ' class="d"' : ""}>${nf(v, 1)}</td>`).join("")}<td>${nf(row[i], 1)}</td></tr>`).join("")}<tr><td>Total</td>${col.map((v) => `<td>${nf(v, 1)}</td>`).join("")}<td>${nf(tot, 1)}</td></tr></tbody></table>`,
     sheets: () => [{ name: "Change matrix (ha)", rows: [[{ v: "From \\ To", bold: true }, ...names.map((x) => ({ v: x, bold: true })), { v: "Total", bold: true }], ...T.map((r, i) => [names[i], ...r.map((v) => +v.toFixed(2)), +row[i].toFixed(2)]), ["Total", ...col.map((v) => +v.toFixed(2)), +tot.toFixed(2)]] },
@@ -912,6 +939,8 @@ function smoothResult(size) {
   for (let i = 0; i < r.cls.length; i++) if (r.cls[i] !== r.raw[i]) changed++;
   r.smooth = size; r.smoothChanged = changed; r.version++;
   r.areas = classAreas(r.cls, r.grid, maxCode);
+  // accuracy follows the map: smoothing changes test pixels too
+  if (r.kind === "classified" && r.sp?.test.cells.length) r.accTest = mapAccuracy(r.cls, r.sp.test.cells, r.sp.test.y, r.codes);
   const W = r.grid.width, H = r.grid.height, comps = labelComponents(r.cls, W, H), per = {};
   for (let k = 1; k <= comps.n; k++) per[comps.compCls[k]] = (per[comps.compCls[k]] ?? 0) + 1;
   r.patches = per;

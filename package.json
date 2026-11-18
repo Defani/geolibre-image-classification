@@ -1,12 +1,12 @@
 {
   "name": "geolibre-image-classification",
-  "version": "0.4.9",
+  "version": "0.5.0",
   "private": true,
   "type": "module",
   "description": "Image Classification plugin for GeoLibre",
   "scripts": {
     "build": "node build.mjs",
-    "test": "node test/unsup.mjs && node test/apply.mjs && node test/gpu-pack.mjs"
+    "test": "node test/unsup.mjs && node test/apply.mjs && node test/gpu-pack.mjs && node test/accuracy.mjs && node test/palettes.mjs"
   },
   "devDependencies": {
     "esbuild": "0.24.2"

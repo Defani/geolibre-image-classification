@@ -1,7 +1,7 @@
 // Image Classification: GeoLibre plugin UI. Core (indices, classifiers, accuracy, GeoTIFF writer) is prepended by build.mjs.
 const ID = "image-classification";
 const PANEL = ID + "-panel";
-const VERSION = "0.4.9";
+const VERSION = "0.5.0";
 const SRC = "icl-samples", DRAFT = "icl-draft";
 const ICON =
   "data:image/svg+xml;utf8," +
@@ -41,7 +41,7 @@ S.params = {
   algo: "RF", rfTrees: 500, rfLeaf: 1, rfBag: 0.5, rfVars: "sqrt", rfDepth: 0,
   gtbTrees: 200, gtbShrink: 0.05, gtbSamp: 0.7, gtbNodes: 5,
   svmKernel: "RBF", svmCost: 10, svmGamma: 0.5, svmDegree: 3, svmCoef: 0,
-  split: 0.7, splitBy: "pixel", maxPix: 500, seed: 42, balanced: false, gpu: true, smooth: 0, outName: "Land Cover (Random Forest)",
+  split: 0.7, splitBy: "sample", maxPix: 500, seed: 42, balanced: false, gpu: true, smooth: 0, outName: "Land Cover (Random Forest)",
   kind: "sup", ualgo: "KM", uK: 8, uIter: 30, uTol: 0.5, uSample: 50000,
 };
 
@@ -971,6 +971,7 @@ function card(id, full = false) {
     <div class="icl-chead">
       <h3>${esc(c.title)}</h3>
       <div class="icl-vseg" role="group" aria-label="View">${seg("chart", "chart", c.chartLabel ?? "Chart")}${seg("table", "table", "Table")}</div>
+      ${view === "chart" && c.palettes ? `<select class="icl-pal" data-pal="${id}" aria-label="Colour palette" title="Colour palette">${c.palettes.map((p) => `<option value="${p}"${(S.pal?.[id] ?? c.palettes[0]) === p ? " selected" : ""}>${p}</option>`).join("")}</select>` : ""}
       ${view === "chart" ? `<button type="button" class="icl-cbtn${texting ? " on" : ""}" data-ctx="${id}" aria-pressed="${texting}" title="Add text: click the chart to place it, drag to move, double-click to edit" aria-label="Add text">${ico("text")}</button>` : ""}
       <div class="icl-dl"><button type="button" class="icl-cbtn" data-cm="${id}" aria-haspopup="menu" aria-expanded="${open}" title="Download" aria-label="Download">${ico("down")}</button>${menu}</div>
       <button type="button" class="icl-cbtn" data-cf="${id}" title="${full ? "Close full screen" : "Full screen"}" aria-label="${full ? "Close full screen" : "Full screen"}">${ico(full ? "close" : "full")}</button>
@@ -992,6 +993,7 @@ function openFull(id) {
   el.addEventListener("click", (e) => { if (e.target === el) closeFull(); else onClick(e); });
   el.addEventListener("mousedown", onChartDown);
   el.addEventListener("dblclick", onChartDbl);
+  el.addEventListener("change", onChange);
   document.body.append(el);
 }
 const csvOf = (sheets) => {
@@ -1158,7 +1160,6 @@ async function runClassification() {
     const trees = p.algo === "RF" ? p.rfTrees : p.gtbTrees;
     const model = await train(p.algo, Xtr, ytr, sp.train.cells.length, d, K, opts, (f) => progress(p.algo === "SVM" ? "Training SVM" : `Training · tree ${Math.round(f * trees)} / ${trees}`, f));
     progress("Testing", 0); await tick();
-    const accTest = sp.test.cells.length ? accuracy(Uint8Array.from(sp.test.y), predict(model, gather(layers, sp.test.cells), sp.test.cells.length), K) : null;
     const accTrain = accuracy(ytr, predict(model, Xtr, sp.train.cells.length), K);
 
     const n = grid.width * grid.height, tc = performance.now();
@@ -1167,6 +1168,8 @@ async function runClassification() {
     const maxCode = S.classes.reduce((a, c) => Math.max(a, c.code), 0);
     const final = p.smooth ? majority(cls, grid.width, grid.height, p.smooth, Math.max(maxCode, ...sp.codes)) : cls;
     const areas = classAreas(final, grid, Math.max(maxCode, ...sp.codes));
+    // test pixels are read from the finished map, so accuracy describes the map that is exported, smoothing included
+    const accTest = sp.test.cells.length ? mapAccuracy(final, sp.test.cells, sp.test.y, sp.codes) : null;
     const featRoles = [...st.bands.map((b) => ({ role: b.role, token: bandToken(n0(b.band.label)), label: b.band.label })), ...indexDefs().map((x) => ({ index: x.name }))];
     pushResult({ kind: "classified", device, classifySec, algo: p.algo, opts, names, featRoles, model, sp, accTest, accTrain, grid, cls: final, areas, codes: sp.codes, classes: S.classes.map((c) => ({ ...c })), splitBy: p.splitBy, seconds: (performance.now() - t0) / 1000, smooth: p.smooth, name: (p.outName.trim() || "Land Cover") + (S.win && imageSets().length > 1 ? ` (${activeSetName()})` : "") });
     wlog(`${ALGO_NAMES[p.algo]} on ${activeSetName()}: ${nf(grid.width)} × ${nf(grid.height)} px (${nf(n)} px), ${d} inputs = ${nf((n * d * 4) / 1048576, 1)} MB stack in memory, ${nf(sp.train.cells.length)} training / ${nf(sp.test.cells.length)} test pixels, ${accTest ? `OA ${pct(accTest.oa)}%, kappa ${accTest.kappa.toFixed(3)}` : "no test pixels"}, image classified on ${device} in ${fmtDur(classifySec)}, total ${fmtDur((performance.now() - t0) / 1000)}`);
@@ -1829,7 +1832,7 @@ function tabResults() {
   <section class="icl-sec">
     <div class="icl-mid"><h3 class="icl-head">Accuracy</h3><span class="icl-lab">${ALGO_NAMES[r.algo]} · ${params} · ${r.names.length} inputs</span></div>
     <div class="icl-tiles">${tiles.map(([k, v]) => `<div class="icl-tile"><span class="icl-lab">${k}</span><b>${v}</b></div>`).join("")}</div>
-    <span class="icl-lab">${nf(r.sp.train.cells.length)} training · ${nf(r.sp.test.cells.length)} test pixels · ${fmtDur(r.seconds)}${r.sp.capped ? ` · ${r.sp.capped} samples capped at ${P().maxPix} px` : ""}</span>
+    <span class="icl-lab">${nf(r.sp.train.cells.length)} training · ${nf(r.sp.test.cells.length)} test pixels · ${fmtDur(r.seconds)}${r.sp.conflicts ? ` · ${nf(r.sp.conflicts)} pixels left out: inside samples of two classes` : ""}${r.sp.pixelFallback?.length ? ` · split by pixel for class ${r.sp.pixelFallback.join(", ")} (one sample only)` : ""}${r.sp.capped ? ` · ${r.sp.capped} samples capped at ${P().maxPix} px` : ""}</span>
   </section>
   <section class="icl-sec">${matrix}</section>
   <section class="icl-sec">${card("areas")}</section>
@@ -1957,6 +1960,7 @@ function onClick(e) {
 
 function onChange(e) {
   const t = e.target, ds = t.dataset;
+  if (ds.pal) { (S.pal ??= {})[ds.pal] = t.value; return redrawCard(ds.pal); }
   if (ds.band) { S.inputs[ds.band].on = t.checked; invalidate(); return render(); }
   if (ds.role) { S.inputs[ds.role].role = t.value; S.inputs[ds.role].auto = false; invalidate(); return render(); }
   if (ds.color) { const c = S.classes.find((x) => x.code === +ds.color); if (c) c.color = t.value; syncMap(); renderProfile(); renderFloat(); return; }
