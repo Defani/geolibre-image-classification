@@ -890,16 +890,11 @@ async function applyToSet(key) {
     const layers = r.featRoles.map((f) => (f.index ? fc.layers[fc.names.indexOf(f.index)] : st.data[pick[bi++]]));
     const miss = r.featRoles.filter((f, i) => !layers[i]).map((f) => f.index || f.role || n0(f.label ?? "a band"));
     if (miss.length) throw new Error(`${setNameOf(key)} lacks ${miss.join(", ")}.`);
-    const g = st.grid, n = g.width * g.height, d = layers.length, cls = new Uint8Array(n), CH = 32768, X = new Float32Array(CH * d), out = new Uint8Array(CH), idx = new Int32Array(CH);
-    for (let start = 0; start < n; start += CH) {
-      let m = 0;
-      for (let k = start; k < Math.min(n, start + CH); k++) { if (!st.valid[k]) continue; let ok = true; for (let j = 0; j < d; j++) { const v = layers[j][k]; if (!Number.isFinite(v)) { ok = false; break; } X[m * d + j] = v; } if (ok) idx[m++] = k; }
-      if (m) { predict(r.model, X, m, out); for (let i = 0; i < m; i++) cls[idx[i]] = r.codes[out[i]]; }
-      progress("Classifying " + setNameOf(key), start / n); await tick();
-    }
+    const g = st.grid, n = g.width * g.height;
+    const { cls, device } = await classifyPixels(r.model, layers, st.valid, n, r.codes, "Classifying " + setNameOf(key));
     const maxCode = Math.max(...r.codes);
     pushResult({ ...r, kind: "applied", accTest: null, patches: null, seconds: (performance.now() - t0) / 1000, grid: g, cls, areas: classAreas(cls, g, maxCode), name: `Land Cover (${setNameOf(key)})`, version: 0 });
-    wlog(`Applied the model to ${setNameOf(key)} in ${fmtDur((performance.now() - t0) / 1000)}.`);
+    wlog(`Applied the model to ${setNameOf(key)} (${nf(g.width)} × ${nf(g.height)} px) on ${device} in ${fmtDur((performance.now() - t0) / 1000)}.`);
     S.imgCache.set("img:" + key, { canvas: compositeCanvas(st), grid: g });
   } catch (e) { console.warn("[image-classification] apply to", key, e); say(e?.message ?? String(e)); }
   finally { S.set = prev; S.applying = false; S.busy = false; progress(null); render(); }

@@ -1072,3 +1072,77 @@ export function transitions(a, b, grid, codes) {
   }
   return T.map((r) => Array.from(r));
 }
+
+// ---------------------------------------------------------------- flat model layout for the GPU
+
+/**
+ * A trained model as flat typed arrays, the layout the WebGPU shaders read. Trees: every node of every tree in one
+ * list, children as global node indices, `roots[t]` the first node of tree t (GTB trees run round by round, class
+ * t % K). SVM: standardisation, then per class pair [a, b, svStart, svCount] with its bias, support vectors and
+ * coefficients (or the weight vector of a linear kernel).
+ */
+export function packModel(model) {
+  const { d, K } = model;
+  if (model.type === "RF" || model.type === "GTB") {
+    const trees = model.type === "RF" ? model.trees : model.rounds.flat();
+    const total = trees.reduce((s, t) => s + t.feat.length, 0), roots = new Uint32Array(trees.length);
+    const feat = new Int32Array(total), kids = new Int32Array(total * 2), thr = new Float32Array(total), val = new Float32Array(total);
+    let o = 0;
+    trees.forEach((t, k) => {
+      roots[k] = o;
+      for (let i = 0; i < t.feat.length; i++) {
+        feat[o + i] = t.feat[i]; thr[o + i] = t.thr[i]; val[o + i] = t.val[i];
+        kids[(o + i) * 2] = t.left[i] < 0 ? -1 : o + t.left[i]; kids[(o + i) * 2 + 1] = t.right[i] < 0 ? -1 : o + t.right[i];
+      }
+      o += t.feat.length;
+    });
+    return { type: model.type, d, K, trees: trees.length, roots, feat, kids, thr, val, shrinkage: model.shrinkage ?? 0 };
+  }
+  const P = model.pairs, linear = model.kernel === "LINEAR";
+  const pairs = new Uint32Array(P.length * 4), bias = new Float32Array(P.length);
+  const nsv = P.reduce((s, p) => s + p.coef.length, 0), sv = new Float32Array(linear ? 1 : Math.max(1, nsv * d)), coef = new Float32Array(Math.max(1, nsv)), w = new Float32Array(linear ? P.length * d : 1);
+  let o = 0;
+  P.forEach((p, k) => {
+    pairs.set([p.a, p.b, o, p.coef.length], k * 4); bias[k] = p.bias;
+    if (linear) w.set(p.w, k * d);
+    else { sv.set(p.sv, o * d); coef.set(p.coef, o); }
+    o += p.coef.length;
+  });
+  const kernel = { LINEAR: 0, RBF: 1, POLY: 2, SIGMOID: 3 }[model.kernel] ?? 1;
+  return { type: "SVM", d, K, kernel, gamma: model.gamma, coef0: model.coef0 ?? 0, degree: model.degree ?? 3, mean: Float32Array.from(model.mean), sd: Float32Array.from(model.sd), pairs, bias, sv, coef, w };
+}
+
+/** CPU twin of the GPU shaders, on the packed arrays: the tests check it against predict(). */
+export function predictPacked(pm, X, n, out = new Uint8Array(n)) {
+  const { d, K } = pm, F = new Float64Array(K);
+  for (let i = 0; i < n; i++) {
+    F.fill(0);
+    const off = i * d;
+    if (pm.type === "RF" || pm.type === "GTB") {
+      for (let t = 0; t < pm.trees; t++) {
+        let k = pm.roots[t];
+        while (pm.feat[k] >= 0) k = pm.kids[k * 2 + (X[off + pm.feat[k]] <= pm.thr[k] ? 0 : 1)];
+        if (pm.type === "RF") F[pm.val[k]]++; else F[t % K] += pm.shrinkage * pm.val[k];
+      }
+    } else {
+      const z = new Float64Array(d);
+      for (let j = 0; j < d; j++) z[j] = (X[off + j] - pm.mean[j]) / pm.sd[j];
+      for (let p = 0; p < pm.bias.length; p++) {
+        const [a, b, s0, ns] = pm.pairs.subarray(p * 4, p * 4 + 4);
+        let f = pm.bias[p];
+        if (pm.kernel === 0) for (let j = 0; j < d; j++) f += pm.w[p * d + j] * z[j];
+        else for (let s = s0; s < s0 + ns; s++) {
+          let dot = 0, dist = 0;
+          for (let j = 0; j < d; j++) { const v = pm.sv[s * d + j]; dot += v * z[j]; dist += (v - z[j]) ** 2; }
+          const kv = pm.kernel === 1 ? Math.exp(-pm.gamma * dist) : pm.kernel === 2 ? Math.pow(pm.gamma * dot + pm.coef0, pm.degree) : Math.tanh(pm.gamma * dot + pm.coef0);
+          f += pm.coef[s] * kv;
+        }
+        F[f >= 0 ? a : b]++;
+      }
+    }
+    let best = 0;
+    for (let k = 1; k < K; k++) if (F[k] > F[best]) best = k;
+    out[i] = best;
+  }
+  return out;
+}
