@@ -327,3 +327,6 @@
 .icl-white .icl-table th { color: #6b7280; }
 .icl-white .icl-table td.d { background: #eff6ff; }
 .icl-white .icl-cnote { color: #6b7280; }
+
+/* heatmap palette picker in a card header */
+.icl .icl-pal { height: 26px; padding: 0 22px 0 8px; font-size: 12px; border-radius: 6px; max-width: 110px; }

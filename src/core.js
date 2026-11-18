@@ -187,7 +187,10 @@ function shuffle(a, rand) {
 /**
  * Turn samples into training and test pixels.
  * samples: [{ code, cells:number[] }]; valid(cell) says whether a cell holds data.
- * Returns { train:{cells,y}, test:{cells,y}, codes, perClass:[{code,samples,train,test}], capped }.
+ * A cell inside samples of two different classes is a contradiction: it is left out of both and counted in
+ * `conflicts` rather than silently given to whichever sample came first. With by = "sample", a class with a single
+ * sample cannot be split by sample; its pixels are split by pixel and its code is listed in `pixelFallback`.
+ * Returns { train:{cells,y}, test:{cells,y}, codes, perClass:[{code,samples,train,test}], capped, conflicts, pixelFallback }.
  */
 export function splitSamples(samples, opts) {
   const { ratio = 0.7, by = "pixel", maxPix = 500, seed = 42, valid = () => true } = opts;
@@ -197,17 +200,21 @@ export function splitSamples(samples, opts) {
   const per = codes.map((c) => ({ code: c, samples: 0, train: 0, test: 0 }));
   let capped = 0;
   const push = (set, cell, k) => { set.cells.push(cell); set.y.push(k); };
+  const owner = new Map(), bad = new Set();
+  for (const s of samples) for (const c of s.cells) { const o = owner.get(c); if (o === undefined) owner.set(c, s.code); else if (o !== s.code) bad.add(c); }
   const groups = codes.map(() => []);
   for (const s of samples) {
     const k = kOf.get(s.code);
-    let cells = s.cells.filter((c) => valid(c) && !seen.has(c));
+    let cells = s.cells.filter((c) => valid(c) && !seen.has(c) && !bad.has(c));
     cells.forEach((c) => seen.add(c));
     if (!cells.length) continue;
     per[k].samples++;
     if (cells.length > maxPix) { cells = shuffle(cells, rand).slice(0, maxPix); capped++; }
     groups[k].push(cells);
   }
+  const pixelFallback = [];
   groups.forEach((list, k) => {
+    if (by === "sample" && list.length === 1) pixelFallback.push(codes[k]);
     if (by === "sample" && list.length > 1) {
       // whole samples go to one side, so test pixels never sit next to training pixels of the same polygon
       const order = shuffle(list.map((_, i) => i), rand), nTrain = Math.min(list.length - 1, Math.max(1, Math.round(list.length * ratio)));
@@ -219,7 +226,7 @@ export function splitSamples(samples, opts) {
   });
   tr.y.forEach((k) => per[k].train++);
   te.y.forEach((k) => per[k].test++);
-  return { train: tr, test: te, codes, perClass: per, capped };
+  return { train: tr, test: te, codes, perClass: per, capped, conflicts: bad.size, pixelFallback };
 }
 
 /** Row-major feature matrix for a list of cells. layers: Float32Array[] all on the same grid. */
@@ -574,6 +581,17 @@ export function train(algo, X, y, n, d, K, opts, onProgress) {
 }
 
 // ---------------------------------------------------------------- accuracy
+
+/**
+ * Accuracy of the map itself at the test cells: the class each cell has in `cls` (after any smoothing) against its
+ * reference class index in `y`. A cell the map left empty counts as wrong (it is put in the last class's column only
+ * when it holds a code outside `codes`, which a finished map never does).
+ */
+export function mapAccuracy(cls, cells, y, codes) {
+  const K = codes.length, ix = new Map(codes.map((c, i) => [c, i])), pred = new Uint8Array(cells.length), truth = Uint8Array.from(y);
+  for (let i = 0; i < cells.length; i++) { const k = ix.get(cls[cells[i]]); pred[i] = k ?? (truth[i] + 1) % K; }
+  return accuracy(truth, pred, K);
+}
 
 /** matrix[reference][classified]. */
 export function accuracy(truth, pred, K) {
