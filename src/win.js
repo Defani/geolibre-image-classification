@@ -631,7 +631,7 @@ async function computeStats() {
     const per = new Map();
     if (bands.length) for (const s of cellsForSamples(g)) {
       const e = per.get(s.code) ?? { n: 0, sum: new Float64Array(bands.length), sq: new Float64Array(bands.length) };
-      for (const c of s.cells) { if (!st.valid[c]) continue; e.n++; bands.forEach((b, j) => { const v = st.data[b.i][c] * st.factor; e.sum[j] += v; e.sq[j] += v * v; }); }
+      for (const c of s.cells) { if (!st.valid[c]) continue; e.n++; bands.forEach((b, j) => { const v = st.data[b.i][c] * st.factor + st.offset; e.sum[j] += v; e.sq[j] += v * v; }); }
       per.set(s.code, e);
     }
     const lines = S.classes.filter((c) => per.get(c.code)?.n).map((c) => { const e = per.get(c.code); return { name: c.name, color: c.color, active: c.code === S.active, mean: Array.from(e.sum, (v) => v / e.n), sd: Array.from(e.sum, (v, j) => Math.sqrt(Math.max(0, e.sq[j] / e.n - (v / e.n) ** 2))) }; });
@@ -820,10 +820,13 @@ async function applyToSet(key) {
   const t0 = performance.now();
   try {
     S.set = key;
-    const st = await ensureStack(), fc = featureLayers(st), byRole = {};
-    st.bands.forEach((b, i) => { if (b.role && !byRole[b.role]) byRole[b.role] = st.data[i]; });
-    const layers = r.featRoles.map((f) => (f.role ? byRole[f.role] : fc.layers[fc.names.indexOf(f.index)]));
-    const miss = r.featRoles.filter((f, i) => !layers[i]).map((f) => f.role || f.index);
+    const st = await ensureStack(), fc = featureLayers(st);
+    // bands without a role (Sentinel-2 B1 or B9, a custom sensor) are matched by band number or position
+    const bandFeats = r.featRoles.filter((f) => !f.index);
+    const pick = matchBands(bandFeats, st.bands.map((b) => ({ role: b.role, token: bandToken(n0(b.band.label)) })));
+    let bi = 0;
+    const layers = r.featRoles.map((f) => (f.index ? fc.layers[fc.names.indexOf(f.index)] : st.data[pick[bi++]]));
+    const miss = r.featRoles.filter((f, i) => !layers[i]).map((f) => f.index || f.role || n0(f.label ?? "a band"));
     if (miss.length) throw new Error(`${setNameOf(key)} lacks ${miss.join(", ")}.`);
     const g = st.grid, n = g.width * g.height, d = layers.length, cls = new Uint8Array(n), CH = 32768, X = new Float32Array(CH * d), out = new Uint8Array(CH), idx = new Int32Array(CH);
     for (let start = 0; start < n; start += CH) {

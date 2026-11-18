@@ -57,11 +57,51 @@ export const ROLE_NAMES = { B2: "Blue", B3: "Green", B4: "Red", B5: "Red edge 1"
 
 /** Guess the band role from a layer or file name ("S2A_B8A.tif" -> "B8A", "LC09_SR_B5" with sensor l8 -> "B8"). */
 export function guessRole(name, sensor = "s2") {
-  const m = /(?:^|[^A-Za-z0-9])B(?:and)?[_ ]?(?:0?(8A|1[0-2]|[1-9])|(0))(?![0-9A-Za-z])/i.exec(String(name).replace(/\.[A-Za-z0-9]+$/, ""));
-  if (!m || sensor === "custom") return "";
-  const b = "B" + (m[1] ?? m[2]).toUpperCase();
+  const b = bandToken(name);
+  if (!b || sensor === "custom") return "";
   if (SENSOR_ROLES[sensor]) return SENSOR_ROLES[sensor][b] ?? "";
   return ROLES.includes(b) ? b : "";
+}
+
+/** The band number written in a name, as the file has it ("S2_B8A" -> "B8A", "Band 03" -> "B3"); "" when there is none. */
+export function bandToken(name) {
+  const m = /(?:^|[^A-Za-z0-9])B(?:and)?[_ ]?(?:0?(8A|1[0-2]|[1-9])|(0))(?![0-9A-Za-z])/i.exec(String(name).replace(/\.[A-Za-z0-9]+$/, ""));
+  return m ? "B" + (m[1] ?? m[2]).toUpperCase() : "";
+}
+
+/**
+ * Which band of another image feeds each band input of a trained model. trained and target: [{ role, token }] in
+ * input order. A band is matched by role first (so Landsat B5 meets Sentinel-2 B8), then by its band number, then
+ * by its place among the bands still free. Returns target indices, -1 where nothing fits.
+ */
+export function matchBands(trained, target) {
+  const used = new Set(), out = trained.map(() => -1);
+  const take = (i, j) => { out[i] = j; used.add(j); };
+  trained.forEach((f, i) => { if (!f.role) return; const j = target.findIndex((t, k) => !used.has(k) && t.role === f.role); if (j >= 0) take(i, j); });
+  trained.forEach((f, i) => { if (out[i] >= 0 || !f.token) return; const j = target.findIndex((t, k) => !used.has(k) && t.token === f.token); if (j >= 0) take(i, j); });
+  const free = target.map((_, k) => k).filter((k) => !used.has(k));
+  const left = trained.map((_, i) => i).filter((i) => out[i] < 0);
+  if (left.length === free.length) left.forEach((i, n) => take(i, free[n]));
+  return out;
+}
+
+/** Reflectance scalings a band can need: value × factor + offset. */
+export const SCALES = {
+  1: { factor: 1, offset: 0 },
+  0.0001: { factor: 1e-4, offset: 0 },
+  // Landsat Collection 2 Level-2 surface reflectance (USGS): DN 7,273-43,636 is reflectance 0-1
+  lc2: { factor: 2.75e-5, offset: -0.2 },
+};
+
+/**
+ * Guess the scaling from the 2-98 % limits of the first band. DN above 2 is scaled; Landsat Collection 2 Level-2
+ * is told apart by its floor (reflectance 0 is DN 7,273, so even dark water sits above 5,000), but only for a
+ * Landsat sensor or an "_SR_B" file name, so a bright Sentinel-2 scene is never taken for it.
+ */
+export function autoScale(lim, sensor, names = []) {
+  if (!(lim[1] > 2)) return { ...SCALES[1], name: "1" };
+  const landsat = sensor === "l8" || sensor === "l57" || names.some((n) => /_SR_B\d/i.test(n));
+  return landsat && lim[0] > 5000 ? { ...SCALES.lc2, name: "lc2" } : { ...SCALES[0.0001], name: "0.0001" };
 }
 
 /** Compile "(B8 - B4) / (B8 + B4)" into a function of a role->value object. Throws on anything but arithmetic. */

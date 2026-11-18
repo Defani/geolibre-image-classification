@@ -1,7 +1,7 @@
 // Image Classification: GeoLibre plugin UI. Core (indices, classifiers, accuracy, GeoTIFF writer) is prepended by build.mjs.
 const ID = "image-classification";
 const PANEL = ID + "-panel";
-const VERSION = "0.4.8";
+const VERSION = "0.4.9";
 const SRC = "icl-samples", DRAFT = "icl-draft";
 const ICON =
   "data:image/svg+xml;utf8," +
@@ -267,14 +267,10 @@ async function ensureStack() {
         throw new Error(`${bands[i].band.label}: ${msg}${/not tiled/i.test(msg) ? ". Untick it in Layers, or convert it to a tiled (Cloud-Optimized) GeoTIFF." : ""}`);
       }
     }
-    let factor = 1;
-    if (S.scale === "auto") {
-      const lim = stretchLimits(data[0], NaN);
-      factor = lim[1] > 2 ? 1e-4 : 1;
-    } else factor = +S.scale;
+    const sc = S.scale === "auto" ? autoScale(stretchLimits(data[0], NaN), S.sensor, bands.map((b) => b.band.label)) : { ...(SCALES[S.scale] ?? SCALES[1]), name: S.scale };
     const valid = new Uint8Array(grid.width * grid.height);
     for (let k = 0; k < valid.length; k++) { let ok = 1; for (const L of data) if (!Number.isFinite(L[k])) { ok = 0; break; } valid[k] = ok; }
-    return { key, grid, bands, data, factor, valid };
+    return { key, grid, bands, data, factor: sc.factor, offset: sc.offset, scaleName: sc.name, valid };
   })();
   S.reading = { key, promise };
   try {
@@ -293,7 +289,7 @@ function featureLayers(st) {
   st.bands.forEach((b, i) => {
     if (!b.role || refl[b.role]) return;
     const src = st.data[i], r = new Float32Array(n);
-    for (let k = 0; k < n; k++) r[k] = src[k] * st.factor;
+    for (let k = 0; k < n; k++) r[k] = src[k] * st.factor + st.offset;
     refl[b.role] = r;
   });
   const layers = [...st.data], names = st.bands.map((b) => b.band.label);
@@ -782,7 +778,7 @@ async function updateProfile() {
     const per = new Map();
     cellsForSamples(st.grid).forEach((s) => {
       const acc = per.get(s.code) ?? { n: 0, sum: new Float64Array(st.data.length) };
-      for (const c of s.cells) { if (!st.valid[c]) continue; acc.n++; for (let b = 0; b < st.data.length; b++) acc.sum[b] += st.data[b][c] * st.factor; }
+      for (const c of s.cells) { if (!st.valid[c]) continue; acc.n++; for (let b = 0; b < st.data.length; b++) acc.sum[b] += st.data[b][c] * st.factor + st.offset; }
       per.set(s.code, acc);
     });
     S.profile = { key: st.key, n: S.samples.length, labels: st.bands.map((b) => b.role || n0(b.band.label)), lines: [...per].filter(([, a]) => a.n).map(([code, a]) => ({ code, mean: Array.from(a.sum, (v) => v / a.n), n: a.n })) };
@@ -1180,7 +1176,7 @@ async function runClassification() {
     const maxCode = S.classes.reduce((a, c) => Math.max(a, c.code), 0);
     const final = p.smooth ? majority(cls, grid.width, grid.height, p.smooth, Math.max(maxCode, ...sp.codes)) : cls;
     const areas = classAreas(final, grid, Math.max(maxCode, ...sp.codes));
-    const featRoles = [...st.bands.map((b) => ({ role: b.role })), ...indexDefs().map((x) => ({ index: x.name }))];
+    const featRoles = [...st.bands.map((b) => ({ role: b.role, token: bandToken(n0(b.band.label)), label: b.band.label })), ...indexDefs().map((x) => ({ index: x.name }))];
     pushResult({ kind: "classified", algo: p.algo, opts, names, featRoles, model, sp, accTest, accTrain, grid, cls: final, areas, codes: sp.codes, classes: S.classes.map((c) => ({ ...c })), splitBy: p.splitBy, seconds: (performance.now() - t0) / 1000, smooth: p.smooth, name: (p.outName.trim() || "Land Cover") + (S.win && imageSets().length > 1 ? ` (${activeSetName()})` : "") });
     wlog(`${ALGO_NAMES[p.algo]} on ${activeSetName()}: ${d} inputs, ${nf(sp.train.cells.length)} training / ${nf(sp.test.cells.length)} test pixels, ${accTest ? `OA ${pct(accTest.oa)}%, kappa ${accTest.kappa.toFixed(3)}` : "no test pixels"}, ${fmtDur((performance.now() - t0) / 1000)}`);
     if (!S.win) await addResultLayer();
@@ -1568,7 +1564,7 @@ function tabLayers() {
     <label class="icl-f"><span>Reference layer</span><select data-k="grid">${opt(gridOpts, S.gridKey)}</select></label>
     <div class="icl-row">
       <label class="icl-f"><span>Cell size</span><select data-k="cell">${opt([[1, "Native"], [2, "2 × native"], [4, "4 × native"], [8, "8 × native"]], S.cellFactor)}</select></label>
-      <label class="icl-f"><span>Reflectance scale</span><select data-k="scale">${opt([["auto", "Auto"], ["1", "1 (already 0–1)"], ["0.0001", "0.0001 (DN 0–10000)"]], S.scale)}</select></label>
+      <label class="icl-f"><span>Reflectance scale</span><select data-k="scale">${opt([["auto", S.stack && S.scale === "auto" ? `Auto (${({ 1: "0–1", 0.0001: "× 0.0001", lc2: "Landsat C2 L2" })[S.stack.scaleName] ?? S.stack.scaleName})` : "Auto"], ["1", "1 (already 0–1)"], ["0.0001", "0.0001 (DN 0–10000)"], ["lc2", "Landsat C2 L2 (× 0.0000275 − 0.2)"]], S.scale)}</select></label>
     </div>
   </section>
   ${compositeSection()}`;
