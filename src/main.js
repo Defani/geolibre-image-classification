@@ -948,7 +948,8 @@ function matrixChart(id, o) {
 
 // ---------------------------------------------------------------- result cards: chart / table, download, full screen
 
-S.view = { matrix: "table", areas: "chart", importance: "chart" };
+// Chart or Table per card; kept apart from S.view, which win.js uses for the centre view name
+S.cardView = {};
 S.cards = {}; S.menu = null; S.full = null; S.fullEl = null; S.exporting = false;
 const ICO = {
   chart: '<path d="M4 20V11M10 20V5M16 20v-7M2.5 20h19"/>',
@@ -963,7 +964,7 @@ const ico = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICO[k]}</svg>`
 function card(id, full = false) {
   const c = S.cards[id];
   if (!c) return "";
-  const view = S.view[id] ?? "chart", texting = S.textMode === id, open = S.menu === id + (full ? ":full" : "");
+  const view = S.cardView[id] ?? "chart", texting = S.textMode === id, open = S.menu === id + (full ? ":full" : "");
   const seg = (v, icon, label) => `<button type="button" data-cv="${v}" data-card="${id}" class="${view === v ? "on" : ""}" aria-pressed="${view === v}">${ico(icon)}${label}</button>`;
   const menu = open ? `<div class="icl-menu" role="menu">${[["csv", "CSV"], ["xlsx", "Excel (XLSX)"], ["png", "PNG 300 dpi"], ["svg", "SVG"]].map(([f, l]) => `<button type="button" role="menuitem" data-cd="${f}" data-card="${id}">${l}</button>`).join("")}</div>` : "";
   return `<div class="icl-card${full ? " full" : ""}" data-card="${id}">
@@ -1005,7 +1006,7 @@ async function exportCard(id, fmt) {
   if (fmt === "xlsx") return download(base + ".xlsx", writeXlsx(c.sheets()), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
   S.exporting = true;
   let svg;
-  try { svg = S.view[id] === "table" && c.tableSvg ? c.tableSvg() : c.chart(); } finally { S.exporting = false; }
+  try { svg = S.cardView[id] === "table" && c.tableSvg ? c.tableSvg() : c.chart(); } finally { S.exporting = false; }
   return exportSvg(svg, base, fmt);
 }
 
@@ -1178,7 +1179,7 @@ async function runClassification() {
     const areas = classAreas(final, grid, Math.max(maxCode, ...sp.codes));
     const featRoles = [...st.bands.map((b) => ({ role: b.role, token: bandToken(n0(b.band.label)), label: b.band.label })), ...indexDefs().map((x) => ({ index: x.name }))];
     pushResult({ kind: "classified", algo: p.algo, opts, names, featRoles, model, sp, accTest, accTrain, grid, cls: final, areas, codes: sp.codes, classes: S.classes.map((c) => ({ ...c })), splitBy: p.splitBy, seconds: (performance.now() - t0) / 1000, smooth: p.smooth, name: (p.outName.trim() || "Land Cover") + (S.win && imageSets().length > 1 ? ` (${activeSetName()})` : "") });
-    wlog(`${ALGO_NAMES[p.algo]} on ${activeSetName()}: ${d} inputs, ${nf(sp.train.cells.length)} training / ${nf(sp.test.cells.length)} test pixels, ${accTest ? `OA ${pct(accTest.oa)}%, kappa ${accTest.kappa.toFixed(3)}` : "no test pixels"}, ${fmtDur((performance.now() - t0) / 1000)}`);
+    wlog(`${ALGO_NAMES[p.algo]} on ${activeSetName()}: ${nf(grid.width)} × ${nf(grid.height)} px (${nf(n)} px), ${d} inputs = ${nf((n * d * 4) / 1048576, 1)} MB stack in memory, ${nf(sp.train.cells.length)} training / ${nf(sp.test.cells.length)} test pixels, ${accTest ? `OA ${pct(accTest.oa)}%, kappa ${accTest.kappa.toFixed(3)}` : "no test pixels"}, ${fmtDur((performance.now() - t0) / 1000)}`);
     if (!S.win) await addResultLayer();
     S.tab = "results";
   } catch (e) {
@@ -1867,7 +1868,7 @@ function onClick(e) {
   const cb = e.target.closest("[data-cv],[data-cm],[data-cd],[data-cf],[data-ctx]");
   if (cb) {
     const d = cb.dataset, inFull = !!cb.closest(".icl-full");
-    if (d.cv) { S.view[d.card] = d.cv; if (S.textMode === d.card) S.textMode = null; redrawCard(d.card); }
+    if (d.cv) { S.cardView[d.card] = d.cv; if (S.textMode === d.card) S.textMode = null; redrawCard(d.card); }
     else if (d.cm) { const key = d.cm + (inFull ? ":full" : ""); S.menu = S.menu === key ? null : key; redrawCard(d.cm); }
     else if (d.cd) { S.menu = null; redrawCard(d.card); exportCard(d.card, d.cd)?.catch?.((err) => say("Download failed: " + (err?.message ?? err))); }
     else if (d.cf) { if (inFull) closeFull(); else openFull(d.cf); }
@@ -2042,7 +2043,9 @@ export const plugin = {
     closeWindow();
     S.root?.remove();
     closeFull();
-    Object.assign(S, { root: null, sources: [], stack: null, stackKey: "", reading: null, result: null, app: null });
+    // results, feature layers and canvases hold several copies of the image: let them go with the plugin
+    S.imgCache?.clear();
+    Object.assign(S, { root: null, sources: [], stack: null, stackKey: "", reading: null, result: null, results: [], fcache: null, chgCache: null, profile: null, baseKey: "", vp: null, app: null });
   },
 };
 
