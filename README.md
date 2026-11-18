@@ -4,9 +4,9 @@
 
 A [GeoLibre](https://geolibre.app) plugin for land cover classification of satellite imagery, in the browser or in GeoLibre Desktop. It covers supervised classification (Random Forest, Gradient Tree Boost, SVM), unsupervised classification (K-means, ISODATA), accuracy assessment (including the area-based estimator of Olofsson et al. 2014), and land cover change between two dates. Everything runs on your own computer; no data is sent to a server.
 
-![Random Forest result on a Sentinel-2 image after the 2023 Mount Lawu fire](docs/img/readme/03-result-map.png)
+![Random Forest map of mangrove, water and non-mangrove in Sembilang, South Sumatra](docs/img/readme/03-result-map.png)
 
-*Example data: Sentinel-2 before and after the 2023 fire on Mount Lawu (Java, Indonesia), Burn scar composite (B11 B8 B3). Purple = burned.*
+*Example: Sentinel-2 of the Sembilang mangrove coast (South Sumatra, Indonesia), 2,506 × 2,507 px at 10 m, 11 bands + 7 indices, 450 point samples, Random Forest 500 trees. Green = mangrove, blue = water, sand = non-mangrove. The image was classified on the GPU in 9 s.*
 
 ## Contents
 
@@ -30,9 +30,10 @@ A [GeoLibre](https://geolibre.app) plugin for land cover classification of satel
 | Display | RGB composite (True colour, False colour, Burn scar, SWIR, Agriculture presets, or any bands), single band, index, your own expression. Band labels by number (B11 B8 B3) or name (SWIR1 NIR Green) |
 | Samples | Point, polygon, circle, rectangle (drag or two clicks). The image pans only with the hand tool. Import from a vector layer, save as a layer |
 | Supervised | Random Forest, Gradient Tree Boost, SVM (RBF, linear, polynomial, sigmoid), optional *Balance classes* |
+| GPU | The image is classified on the graphics card through WebGPU (RF, GTB, SVM), with the same labels as the CPU; falls back to the CPU where WebGPU is missing |
 | Unsupervised | K-means (k-means++ seeding), ISODATA (split, merge, drop clusters), then label clusters as classes |
 | Accuracy | Confusion matrix, OA, kappa, PA, UA, F1, OOB (RF), area-based accuracy with standard errors |
-| Charts | White cards (also in dark mode): matplotlib-style confusion matrix, class areas, variable importance, journal-style spectral profile, seaborn-style correlation heatmap |
+| Charts | White cards (also in dark mode): matplotlib-style confusion matrix, class areas, variable importance, journal-style spectral profile, index values per class (mean ± SD), seaborn-style correlation heatmap |
 | Land cover change | Apply the model to an image from another date, then change matrix (ha), Sankey diagram, gains and losses |
 | Post-processing | Majority smoothing 3×3 / 5×5, conversion to polygons (dissolved per class) |
 | Export | Straight to a folder on your computer: paletted GeoTIFF, GeoJSON, XLSX, CSV, charts as 300 dpi PNG and SVG |
@@ -51,7 +52,7 @@ Same steps with *Choose .zip…*; the plugin is stored in the browser. For devel
 
 ## Tutorial
 
-The examples use Sentinel-2 imagery of Mount Lawu, 2023: seven bands before the fire (`PreFire_Band_B2 … B12`) and six after it (`PostFire_Band_*`).
+Steps 1–5 use Sentinel-2 imagery of the Sembilang mangrove coast in South Sumatra: eleven bands (`SembilangA_B1 … B12`, no B2), a B8 B11 B3 composite (mangrove shows dark orange, water blue, other land pale), three classes (Mangrove, Water, Non-mangrove) and 450 point samples. A second crop, `SembilangB`, is used to apply the model to another image. The land cover change and K-means examples use Sentinel-2 before and after the 2023 fire on Mount Lawu (`PreFire_Band_*`, `PostFire_Band_*`), since change needs two dates of one place.
 
 ### 1. Load the imagery
 
@@ -80,7 +81,7 @@ Pick a drawing tool on the toolbar or under **Draw samples**:
 
 While a drawing tool is on, the image does not move; use the hand tool to pan and the mouse wheel to zoom. The spectral profile at the bottom of the dock updates with every new sample.
 
-![Drawing samples with the Rectangle tool](docs/img/readme/02-samples.png)
+![Point samples on the B8 B11 B3 composite, with the class list and drawing tools](docs/img/readme/02-samples.png)
 
 Tip: draw several small, spread-out boxes per class rather than one large box, over clearly homogeneous pixels.
 
@@ -98,6 +99,7 @@ Tip: draw several small, spread-out boxes per class rather than one large box, o
 | Max pixels per sample | 500 | keeps large polygons from dominating |
 | Balance classes | off | class weights inversely proportional to class frequency |
 | Seed | 42 | runs are repeatable |
+| Use GPU | on | classifies the image's pixels with WebGPU; training stays on the CPU |
 
 Press **Run classification**. The result appears on the map, in the left dock under **Results**, and in **4 Results**: OA, kappa, area per class, number of patches.
 
@@ -107,11 +109,13 @@ Press **Run classification**. The result appears on the map, in the left dock un
 
 ![Accuracy tab](docs/img/readme/07-accuracy.png)
 
-**Charts** tab: every card has a Chart/Table switch, downloads (CSV, XLSX, 300 dpi PNG, SVG) and full screen.
+**Charts** tab: every card has a Chart/Table switch, downloads (CSV, XLSX, 300 dpi PNG, SVG) and full screen. **Index values per class** gives the mean ± 1 SD of every selected index over the sample pixels of each class, one panel per index.
 
 ![Charts tab](docs/img/readme/04-charts.png)
 
-![Spectral profile](docs/img/readme/05-spectral-profile.png)
+![Spectral profile per class](docs/img/readme/05-spectral-profile.png)
+
+![Index values per class, mean ± 1 SD](docs/img/readme/05b-index-values.png)
 
 ![Input correlation heatmap](docs/img/readme/06-correlation.png)
 
@@ -121,14 +125,14 @@ In **4 Results → Smoothing** choose Majority 3 × 3 or 5 × 5 (areas and chart
 
 ### 6. Before/after and land cover change
 
-1. In **4 Results → Classify another image**, pick another set (for example `PreFire_Band`) and press **Classify**. The same model is applied; bands are matched by role.
+1. In **4 Results → Classify another image**, pick another set (for example `SembilangB`, or `PreFire_Band` in the fire example) and press **Classify**. The same model is applied; bands are matched by role.
 2. The **Split view** tab shows two images or results with a swipe or side by side.
 
-![Split view before and after the fire](docs/img/readme/09-split-view.png)
+![Split view: the SembilangB image and the land cover the SembilangA model gives it](docs/img/readme/09-split-view.png)
 
 3. **Change** tab: choose the earlier result (*From*) and the later one (*To*); the ⇄ button swaps them. It shows unchanged/changed area, the change matrix, a Sankey diagram, and gains and losses per class.
 
-![Land cover change](docs/img/readme/08-change.png)
+![Land cover change (Mount Lawu example)](docs/img/readme/08-change.png)
 
 ![Change matrix, Sankey, gains and losses](docs/img/readme/08b-change-gains.png)
 
@@ -138,7 +142,7 @@ In the example, about 1,295 ha of pre-fire forest became burned area; burned are
 
 **3 Model → Unsupervised**, choose K-means or ISODATA, set the number of clusters, then **Run clustering**. Under **Label clusters** give each cluster a class (the plugin suggests the nearest class from the sample profiles when there are samples); the labelled clusters become a new land cover map.
 
-![K-means with 8 clusters and labelling](docs/img/readme/10-kmeans.png)
+![K-means with 8 clusters and labelling (Mount Lawu example)](docs/img/readme/10-kmeans.png)
 
 ### 8. Export
 
@@ -166,6 +170,22 @@ In the example, about 1,295 ha of pre-fire forest became burned area; burned are
 | `F5` | run classification / clustering |
 | `Ctrl+E` | export to a folder |
 | `Esc` | cancel an unfinished shape, close a dialog |
+
+### Speed and the GPU
+
+Training uses only the sample pixels and stays on the CPU. Predicting every pixel of the image is the slow part, and each pixel is independent, so with **Use GPU** on (3 Model) it runs as a WebGPU compute shader: one shader walks the RF or GTB trees, another evaluates the one-vs-one SVM. The labels are the same as on the CPU. The **Log** tab records the grid size, pixel count, in-memory stack size, which device classified the image and how long it took.
+
+![Use GPU in the Model tab; the log shows the same run on the GPU and on the CPU](docs/img/readme/11-gpu-log.png)
+
+Measured in web.geolibre.app on a laptop with Intel Iris Xe graphics:
+
+| Test | GPU | CPU |
+|---|---|---|
+| 1,000,000 pixels × 18 inputs, RF 500 trees | 1.1 s | 24.8 s |
+| Sentinel-2 Sembilang, 2,506 × 2,507 px (6.28 M px), 11 bands + 7 indices (431 MB), RF 500 trees: classifying the image | 9.1 s | 3 min 43 s |
+| Same model applied to a second image of 2,115 × 2,115 px (whole step, reading the bands included) | 24 s | 47 s |
+
+WebGPU is in Chrome and Edge; GeoLibre Desktop on Windows runs on WebView2, which has it too (not tested with this plugin yet). Where it is missing, or a GPU call fails part-way, the plugin finishes on the CPU and the log says so.
 
 ## Methods and formulas
 
@@ -357,6 +377,7 @@ Needs Node.js. `npm install` once fetches esbuild.
 npm install
 node build.mjs                      # plugin/ and image-classification-<version>.zip
 node test/apply.mjs                 # band matching for another image, reflectance scale guess
+node test/gpu-pack.mjs              # GPU model layout predicts what the model predicts (RF, GTB, 4 SVM kernels)
 node test/unsup.mjs                 # K-means, ISODATA, correlation, change matrix
 node test/post.mjs                  # smoothing and polygonisation
 node test/weda.mjs <stack.json> <stack.u16> <samples dir> <out.tif>   # core on a real Sentinel-2 stack

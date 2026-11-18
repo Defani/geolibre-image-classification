@@ -74,7 +74,8 @@ function winKey(e) {
 }
 function closeWindow() {
   window.removeEventListener("keydown", winKey, true);
-  S.win?.remove(); S.win = null; S.pill?.remove(); S.pill = null; S.viewer = null;
+  unbindViewer();
+  S.win?.remove(); S.win = null; S.pill?.remove(); S.pill = null;
   if (S.root) { S.root.remove(); }
 }
 function minimiseWindow() {
@@ -227,7 +228,7 @@ function renderView() {
     return;
   }
   el.dataset.kind = S.view;
-  S.viewer = null;
+  unbindViewer();
   el.innerHTML = `<div class="icw-scroll icw-pad">${S.view === "charts" ? chartsView() : S.view === "acc" ? accView() : S.view === "change" ? changeView() : logView()}</div>`;
 }
 
@@ -257,7 +258,11 @@ async function ensureViewImages() {
     const set = activeSet(), st = await ensureStack();
     if (S.applying || set !== activeSet()) return;
     const k = "img:" + activeSet() + "|" + st.key + "|" + compChannels().join(",");
-    if (!S.imgCache.has(k)) S.imgCache.set(k, { canvas: compositeCanvas(st), grid: st.grid });
+    if (!S.imgCache.has(k)) {
+      // older composites of this set (other channels or inputs) are never shown again
+      for (const old of S.imgCache.keys()) if (old.startsWith("img:" + set + "|")) S.imgCache.delete(old);
+      S.imgCache.set(k, { canvas: compositeCanvas(st), grid: st.grid });
+    }
     S.baseKey = k;
     S.imgCache.set("img:" + activeSet(), S.imgCache.get(k));
     if (!S.vp) fitView();
@@ -275,6 +280,7 @@ function compositeCanvas(st) {
 function classCanvas(r) {
   const key = "res:" + S.results.indexOf(r) + ":" + (r.version ?? 0);
   if (S.imgCache.has(key)) return S.imgCache.get(key).canvas;
+  for (const old of S.imgCache.keys()) if (old.startsWith(key.slice(0, key.lastIndexOf(":") + 1))) S.imgCache.delete(old); // earlier versions (before smoothing)
   const g = r.grid, n = g.width * g.height, cv = document.createElement("canvas"); cv.width = g.width; cv.height = g.height;
   const ctx = cv.getContext("2d"), im = ctx.createImageData(g.width, g.height), pal = new Map(r.classes.map((c) => [c.code, hexToRgb(c.color)]));
   for (let i = 0; i < n; i++) { const p = pal.get(r.cls[i]); if (!p) continue; im.data[i * 4] = p[0]; im.data[i * 4 + 1] = p[1]; im.data[i * 4 + 2] = p[2]; im.data[i * 4 + 3] = 255; }
@@ -303,11 +309,18 @@ function pxToLl(x, y, g) {
   const q = [g.bounds[0] + (x / g.width) * (g.bounds[2] - g.bounds[0]), g.bounds[3] - (y / g.height) * (g.bounds[3] - g.bounds[1])];
   return g.geographic ? q : g.toLL(q);
 }
+/** Drop the current viewer's window listeners and resize observer; the next viewer binds its own. */
+function unbindViewer() {
+  S.viewer?.off.abort();
+  S.viewer?.ro.disconnect();
+  S.viewer = null;
+}
 function bindViewer(el) {
-  const cv = el.querySelector("canvas");
-  S.viewer = { el, cv };
+  unbindViewer();
+  const cv = el.querySelector("canvas"), off = new AbortController(), signal = off.signal;
   const ro = new ResizeObserver(() => { if (!S.vp) fitView(); drawViewer(); });
   ro.observe(el);
+  S.viewer = { el, cv, off, ro };
   const toPx = (e) => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left - S.vp.x) / S.vp.k, (e.clientY - r.top - S.vp.y) / S.vp.k]; };
   let drag = null;
   el.addEventListener("wheel", (e) => {
@@ -316,15 +329,17 @@ function bindViewer(el) {
     const r = cv.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top, f = e.deltaY < 0 ? 1.2 : 1 / 1.2;
     S.vp = { k: S.vp.k * f, x: mx - (mx - S.vp.x) * f, y: my - (my - S.vp.y) * f };
     drawViewer();
-  }, { passive: false });
+  }, { passive: false, signal });
+  // the zoom buttons sit on top of the image: a click on them is never a pan or a sample
+  const onControl = (e) => !!e.target.closest?.("button, .icw-zoom");
   el.addEventListener("mousedown", (e) => {
-    if (e.button !== 0 || !S.vp) return;
+    if (e.button !== 0 || !S.vp || onControl(e)) return;
     if (S.view === "split" && S.split.mode === "swipe" && Math.abs(e.clientX - cv.getBoundingClientRect().left - (cv.clientWidth * S.split.pos) / 100) < 12) { drag = { split: true }; return; }
     const g = viewGrid();
     if (S.tool === "pan" || S.view === "split" || !g) { drag = { pan: true, x: e.clientX, y: e.clientY, vx: S.vp.x, vy: S.vp.y }; el.classList.add("grabbing"); return; }
     const [px, py] = toPx(e);
     if ((S.tool === "rect" || S.tool === "circle") && !S.draft.length) drag = { shape: true, start: pxToLl(px, py, g), sx: e.clientX, sy: e.clientY };
-  });
+  }, { signal });
   window.addEventListener("mousemove", (e) => {
     if (!S.viewer || S.viewer.el !== el) return;
     if (drag?.split) { const r = cv.getBoundingClientRect(); S.split.pos = Math.max(0, Math.min(100, ((e.clientX - r.left) / r.width) * 100)); drawViewer(); return; }
@@ -336,7 +351,7 @@ function bindViewer(el) {
     S.cursor = ll;
     hoverInfo(px, py, ll);
     if (S.draft.length) drawViewer();
-  });
+  }, { signal });
   window.addEventListener("mouseup", (e) => {
     if (!drag || !S.viewer || S.viewer.el !== el) return;
     el.classList.remove("grabbing");
@@ -349,8 +364,9 @@ function bindViewer(el) {
       S.skipClick = true;
       finishShape(pxToLl(px, py, g));
     }
-  });
+  }, { signal });
   el.addEventListener("click", (e) => {
+    if (onControl(e)) return;
     if (S.skipClick) { S.skipClick = false; return; }
     if (S.tool === "pan" || S.view === "split" || !S.vp || (S.tool === "polygon" && e.detail > 1)) return;
     const g = viewGrid();
@@ -361,9 +377,9 @@ function bindViewer(el) {
     if (S.draft.length >= 3) { const a = llToPx(S.draft[0], g); if (Math.hypot((a[0] - px) * S.vp.k, (a[1] - py) * S.vp.k) <= 10) return finishPolygon(); }
     S.draft.push(p);
     drawViewer();
-  });
-  el.addEventListener("dblclick", (e) => { if (S.tool === "polygon" && S.draft.length >= 3) { e.preventDefault(); finishPolygon(); } });
-  el.addEventListener("mouseleave", () => { S.cursorInfo = null; winStatus(); });
+  }, { signal });
+  el.addEventListener("dblclick", (e) => { if (!onControl(e) && S.tool === "polygon" && S.draft.length >= 3) { e.preventDefault(); finishPolygon(); } }, { signal });
+  el.addEventListener("mouseleave", () => { S.cursorInfo = null; winStatus(); }, { signal });
 }
 function finishShape(p) {
   const a = S.draft[0];
@@ -548,6 +564,31 @@ function profileSvg(id, prof) {
   s += `<line x1="634" x2="664" y1="${ly}" y2="${ly}" stroke="#6b7280"/><rect x="645.5" y="${ly - 3.5}" width="7" height="7" fill="#fff" stroke="#374151"/><text x="672" y="${ly}" dominant-baseline="central" font-size="12" fill="#111827">±1 SD (${esc(sel?.name ?? "")})</text>`;
   return s + svgClose(id);
 }
+/** Index values per class: one panel per index, each class a dot at its mean with a ±1 SD bar. */
+function indexSvg(id, o) {
+  const cols = Math.min(4, o.indices.length), rows = Math.ceil(o.indices.length / cols), pw = 190, ph = 170, W = cols * pw + 20, H = rows * ph + 46;
+  let s = svgOpen(id, W, H, "Index values per class");
+  o.indices.forEach((ix, p) => {
+    const ox = 10 + (p % cols) * pw, oy = 8 + Math.floor(p / cols) * ph, x0 = ox + 46, x1 = ox + pw - 10, y0 = oy + ph - 24, y1 = oy + 22;
+    const lo = Math.min(...ix.stats.map((v) => v.mean - v.sd)), hi = Math.max(...ix.stats.map((v) => v.mean + v.sd));
+    const t = niceTicks(lo, hi === lo ? lo + 1 : hi, 4), a = Math.min(t.ticks[0], lo), b = Math.max(t.hi, hi);
+    const Y = (v) => y0 - ((v - a) / (b - a || 1)) * (y0 - y1), X = (k) => x0 + ((k + 0.5) / ix.stats.length) * (x1 - x0);
+    s += `<text x="${(x0 + x1) / 2}" y="${oy + 12}" text-anchor="middle" font-size="12" font-weight="700" fill="#111827">${esc(ix.name)}</text>`;
+    s += `<rect x="${x0}" y="${y1}" width="${x1 - x0}" height="${y0 - y1}" fill="none" stroke="#111827"/>`;
+    for (const v of t.ticks.filter((v) => v >= a && v <= b)) s += `<line x1="${x0}" x2="${x1}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}" stroke="#e5e7eb"/><line x1="${x0 - 4}" x2="${x0}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}" stroke="#111827"/><text x="${x0 - 6}" y="${Y(v).toFixed(1)}" text-anchor="end" dominant-baseline="central" font-size="10" fill="#111827">${tickFmt(v, t.step)}</text>`;
+    if (a < 0 && b > 0) s += `<line x1="${x0}" x2="${x1}" y1="${Y(0).toFixed(1)}" y2="${Y(0).toFixed(1)}" stroke="#6b7280" stroke-dasharray="3 3"/>`;
+    ix.stats.forEach((v, k) => {
+      const x = X(k).toFixed(1), c = esc(o.classes[k].color);
+      s += `<line x1="${x}" x2="${x}" y1="${Y(v.mean + v.sd).toFixed(1)}" y2="${Y(v.mean - v.sd).toFixed(1)}" stroke="#374151"/><line x1="${X(k) - 4}" x2="${X(k) + 4}" y1="${Y(v.mean + v.sd).toFixed(1)}" y2="${Y(v.mean + v.sd).toFixed(1)}" stroke="#374151"/><line x1="${X(k) - 4}" x2="${X(k) + 4}" y1="${Y(v.mean - v.sd).toFixed(1)}" y2="${Y(v.mean - v.sd).toFixed(1)}" stroke="#374151"/>`;
+      s += `<circle cx="${x}" cy="${Y(v.mean).toFixed(1)}" r="5" fill="${c}" stroke="#111827" stroke-width=".8"/>`;
+    });
+  });
+  let lx = 14;
+  const ly = H - 16;
+  for (const c of o.classes) { s += `<circle cx="${lx + 5}" cy="${ly}" r="5" fill="${esc(c.color)}" stroke="#111827" stroke-width=".8"/><text x="${lx + 14}" y="${ly}" dominant-baseline="central" font-size="12" fill="#111827">${esc(c.name)}</text>`; lx += 26 + c.name.length * 7; }
+  s += `<text x="${W - 12}" y="${ly}" text-anchor="end" dominant-baseline="central" font-size="11" fill="#374151">Mean ± 1 SD over sample pixels</text>`;
+  return s + svgClose(id);
+}
 function sankeySvg(id, T, from, to, colors, labels) {
   const W = 620, H = 360, K = T.length, row = T.map((r) => r.reduce((a, b) => a + b, 0)), col = T[0].map((_, j) => T.reduce((a, r) => a + r[j], 0)), tot = row.reduce((a, b) => a + b, 0) || 1;
   const gap = 8, sc = (H - 60 - (K - 1) * gap) / tot, xl = 160, xr = 448;
@@ -585,12 +626,12 @@ function gainsSvg(id, names, colors, deltas) {
 function chartsView() {
   const r = S.result;
   buildCards(r);
-  const ids = ["matrix", "areas", "importance", "profile", "corr"].filter((id) => S.cards[id]);
+  const ids = ["matrix", "areas", "importance", "profile", "indices", "corr"].filter((id) => S.cards[id]);
   if (!ids.length) return `<div class="icw-empty big">Charts appear once there is an image (spectral profile, input correlation) and a result (confusion matrix, class areas, variable importance).</div>`;
-  return `<div class="icw-cards icl-white">${ids.map((id) => `<div class="${id === "profile" || id === "corr" ? "wide" : ""}">${card(id)}</div>`).join("")}</div>`;
+  return `<div class="icw-cards icl-white">${ids.map((id) => `<div class="${id === "profile" || id === "indices" || id === "corr" ? "wide" : ""}">${card(id)}</div>`).join("")}</div>`;
 }
 function buildCards(r) {
-  const keep = { profile: S.cards.profile, corr: S.cards.corr };
+  const keep = { profile: S.cards.profile, indices: S.cards.indices, corr: S.cards.corr };
   S.cards = {};
   if (r) {
     const nm = (c) => r.classes.find((x) => x.code === c)?.name ?? "Class " + c, a = r.accTest;
@@ -618,6 +659,7 @@ function buildCards(r) {
     }
   }
   if (keep.profile) S.cards.profile = keep.profile;
+  if (keep.indices) S.cards.indices = keep.indices;
   if (keep.corr) S.cards.corr = keep.corr;
   if (!S.statsBusy && S.stack && S.cardsKey !== statsKey()) computeStats();
 }
@@ -643,6 +685,29 @@ async function computeStats() {
         sheets: () => [{ name: "Spectral profile", rows: [[{ v: "Class", bold: true }, ...bands.flatMap((b) => [{ v: b.role + " mean", bold: true }, { v: b.role + " SD", bold: true }])], ...lines.map((l) => [l.name, ...l.mean.flatMap((m, j) => [+m.toFixed(5), +l.sd[j].toFixed(5)])])] }],
       };
     } else delete S.cards.profile;
+    // index layers follow the band layers in the feature cache
+    const nb = st.data.length, idxNames = fc.names.slice(nb), cls = S.classes.filter((c) => per.get(c.code)?.n || S.samples.some((x) => x.code === c.code));
+    if (idxNames.length && cls.length) {
+      const acc = new Map(cls.map((c) => [c.code, { n: 0, sum: new Float64Array(idxNames.length), sq: new Float64Array(idxNames.length) }]));
+      for (const s of cellsForSamples(g)) {
+        const e = acc.get(s.code); if (!e) continue;
+        for (const c of s.cells) {
+          if (!st.valid[c]) continue;
+          e.n++;
+          for (let j = 0; j < idxNames.length; j++) { const v = fc.layers[nb + j][c]; e.sum[j] += v; e.sq[j] += v * v; }
+        }
+      }
+      const used = cls.filter((c) => acc.get(c.code).n);
+      const indices = idxNames.map((name, j) => ({ name, stats: used.map((c) => { const e = acc.get(c.code), m = e.sum[j] / e.n; return { mean: m, sd: Math.sqrt(Math.max(0, e.sq[j] / e.n - m * m)), n: e.n }; }) }));
+      const io = { classes: used.map((c) => ({ name: c.name, color: c.color })), indices };
+      if (used.length) S.cards.indices = {
+        title: "Index values per class", file: "index_values_per_class", chart: () => indexSvg("indices", io),
+        table: () => `<table class="icl-table"><thead><tr><th>Index</th>${io.classes.map((c) => `<th>${esc(c.name)}</th>`).join("")}</tr></thead><tbody>${indices.map((ix) => `<tr><td>${esc(ix.name)}</td>${ix.stats.map((v) => `<td>${v.mean.toFixed(3)} ± ${v.sd.toFixed(3)}</td>`).join("")}</tr>`).join("")}</tbody></table>`,
+        sheets: () => [{ name: "Index values", rows: [[{ v: "Index", bold: true }, ...io.classes.flatMap((c) => [{ v: c.name + " mean", bold: true }, { v: c.name + " SD", bold: true }])], ...indices.map((ix) => [ix.name, ...ix.stats.flatMap((v) => [+v.mean.toFixed(5), +v.sd.toFixed(5)])]), [], ["Pixels", ...io.classes.flatMap((c, k) => [indices[0].stats[k].n, ""])]] }],
+        note: `Mean ± 1 SD of each index over the valid sample pixels of each class.`,
+      };
+      else delete S.cards.indices;
+    } else delete S.cards.indices;
     const valid = [], rand = rng(7), n = g.width * g.height;
     for (let t = 0; t < 400000 && valid.length < 30000; t++) { const c = Math.floor(rand() * n); if (st.valid[c] && fc.layers.every((L) => Number.isFinite(L[c]))) valid.push(c); }
     if (valid.length > 50 && fc.layers.length > 1) {
@@ -828,16 +893,11 @@ async function applyToSet(key) {
     const layers = r.featRoles.map((f) => (f.index ? fc.layers[fc.names.indexOf(f.index)] : st.data[pick[bi++]]));
     const miss = r.featRoles.filter((f, i) => !layers[i]).map((f) => f.index || f.role || n0(f.label ?? "a band"));
     if (miss.length) throw new Error(`${setNameOf(key)} lacks ${miss.join(", ")}.`);
-    const g = st.grid, n = g.width * g.height, d = layers.length, cls = new Uint8Array(n), CH = 32768, X = new Float32Array(CH * d), out = new Uint8Array(CH), idx = new Int32Array(CH);
-    for (let start = 0; start < n; start += CH) {
-      let m = 0;
-      for (let k = start; k < Math.min(n, start + CH); k++) { if (!st.valid[k]) continue; let ok = true; for (let j = 0; j < d; j++) { const v = layers[j][k]; if (!Number.isFinite(v)) { ok = false; break; } X[m * d + j] = v; } if (ok) idx[m++] = k; }
-      if (m) { predict(r.model, X, m, out); for (let i = 0; i < m; i++) cls[idx[i]] = r.codes[out[i]]; }
-      progress("Classifying " + setNameOf(key), start / n); await tick();
-    }
+    const g = st.grid, n = g.width * g.height;
+    const { cls, device } = await classifyPixels(r.model, layers, st.valid, n, r.codes, "Classifying " + setNameOf(key));
     const maxCode = Math.max(...r.codes);
     pushResult({ ...r, kind: "applied", accTest: null, patches: null, seconds: (performance.now() - t0) / 1000, grid: g, cls, areas: classAreas(cls, g, maxCode), name: `Land Cover (${setNameOf(key)})`, version: 0 });
-    wlog(`Applied the model to ${setNameOf(key)} in ${fmtDur((performance.now() - t0) / 1000)}.`);
+    wlog(`Applied the model to ${setNameOf(key)} (${nf(g.width)} × ${nf(g.height)} px) on ${device} in ${fmtDur((performance.now() - t0) / 1000)}.`);
     S.imgCache.set("img:" + key, { canvas: compositeCanvas(st), grid: g });
   } catch (e) { console.warn("[image-classification] apply to", key, e); say(e?.message ?? String(e)); }
   finally { S.set = prev; S.applying = false; S.busy = false; progress(null); render(); }
@@ -935,7 +995,7 @@ async function runExport() {
     if (e.sel.charts) {
       buildCards(r);
       S.exporting = true;
-      try { for (const id of ["matrix", "areas", "importance", "profile", "corr"]) { const c = S.cards[id]; if (!c) continue; const out = await svgToPng(c.chart()); add(`chart_${c.file}_300dpi.png`, out.png, "image/png"); add(`chart_${c.file}.svg`, out.svg, "image/svg+xml"); } }
+      try { for (const id of ["matrix", "areas", "importance", "profile", "indices", "corr"]) { const c = S.cards[id]; if (!c) continue; const out = await svgToPng(c.chart()); add(`chart_${c.file}_300dpi.png`, out.png, "image/png"); add(`chart_${c.file}.svg`, out.svg, "image/svg+xml"); } }
       finally { S.exporting = false; }
     }
     for (let i = 0; i < files.length; i++) {

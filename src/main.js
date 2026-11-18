@@ -41,7 +41,7 @@ S.params = {
   algo: "RF", rfTrees: 500, rfLeaf: 1, rfBag: 0.5, rfVars: "sqrt", rfDepth: 0,
   gtbTrees: 200, gtbShrink: 0.05, gtbSamp: 0.7, gtbNodes: 5,
   svmKernel: "RBF", svmCost: 10, svmGamma: 0.5, svmDegree: 3, svmCoef: 0,
-  split: 0.7, splitBy: "pixel", maxPix: 500, seed: 42, balanced: false, smooth: 0, outName: "Land Cover (Random Forest)",
+  split: 0.7, splitBy: "pixel", maxPix: 500, seed: 42, balanced: false, gpu: true, smooth: 0, outName: "Land Cover (Random Forest)",
   kind: "sup", ualgo: "KM", uK: 8, uIter: 30, uTol: 0.5, uSample: 50000,
 };
 
@@ -948,7 +948,8 @@ function matrixChart(id, o) {
 
 // ---------------------------------------------------------------- result cards: chart / table, download, full screen
 
-S.view = { matrix: "table", areas: "chart", importance: "chart" };
+// Chart or Table per card; kept apart from S.view, which win.js uses for the centre view name
+S.cardView = {};
 S.cards = {}; S.menu = null; S.full = null; S.fullEl = null; S.exporting = false;
 const ICO = {
   chart: '<path d="M4 20V11M10 20V5M16 20v-7M2.5 20h19"/>',
@@ -963,7 +964,7 @@ const ico = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICO[k]}</svg>`
 function card(id, full = false) {
   const c = S.cards[id];
   if (!c) return "";
-  const view = S.view[id] ?? "chart", texting = S.textMode === id, open = S.menu === id + (full ? ":full" : "");
+  const view = S.cardView[id] ?? "chart", texting = S.textMode === id, open = S.menu === id + (full ? ":full" : "");
   const seg = (v, icon, label) => `<button type="button" data-cv="${v}" data-card="${id}" class="${view === v ? "on" : ""}" aria-pressed="${view === v}">${ico(icon)}${label}</button>`;
   const menu = open ? `<div class="icl-menu" role="menu">${[["csv", "CSV"], ["xlsx", "Excel (XLSX)"], ["png", "PNG 300 dpi"], ["svg", "SVG"]].map(([f, l]) => `<button type="button" role="menuitem" data-cd="${f}" data-card="${id}">${l}</button>`).join("")}</div>` : "";
   return `<div class="icl-card${full ? " full" : ""}" data-card="${id}">
@@ -1005,7 +1006,7 @@ async function exportCard(id, fmt) {
   if (fmt === "xlsx") return download(base + ".xlsx", writeXlsx(c.sheets()), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
   S.exporting = true;
   let svg;
-  try { svg = S.view[id] === "table" && c.tableSvg ? c.tableSvg() : c.chart(); } finally { S.exporting = false; }
+  try { svg = S.cardView[id] === "table" && c.tableSvg ? c.tableSvg() : c.chart(); } finally { S.exporting = false; }
   return exportSvg(svg, base, fmt);
 }
 
@@ -1160,25 +1161,15 @@ async function runClassification() {
     const accTest = sp.test.cells.length ? accuracy(Uint8Array.from(sp.test.y), predict(model, gather(layers, sp.test.cells), sp.test.cells.length), K) : null;
     const accTrain = accuracy(ytr, predict(model, Xtr, sp.train.cells.length), K);
 
-    const n = grid.width * grid.height, cls = new Uint8Array(n), CH = 32768, X = new Float32Array(CH * d), out = new Uint8Array(CH), idx = new Int32Array(CH);
-    let last = performance.now();
-    for (let start = 0; start < n; start += CH) {
-      let m = 0;
-      for (let k = start; k < Math.min(n, start + CH); k++) {
-        if (!st.valid[k]) continue;
-        let ok = true;
-        for (let j = 0; j < d; j++) { const v = layers[j][k]; if (!Number.isFinite(v)) { ok = false; break; } X[m * d + j] = v; }
-        if (ok) idx[m++] = k;
-      }
-      if (m) { predict(model, X, m, out); for (let i = 0; i < m; i++) cls[idx[i]] = sp.codes[out[i]]; }
-      if (performance.now() - last > 80) { progress("Classifying image", start / n); await tick(); last = performance.now(); }
-    }
+    const n = grid.width * grid.height, tc = performance.now();
+    const { cls, device } = await classifyPixels(model, layers, st.valid, n, sp.codes, "Classifying image");
+    const classifySec = (performance.now() - tc) / 1000;
     const maxCode = S.classes.reduce((a, c) => Math.max(a, c.code), 0);
     const final = p.smooth ? majority(cls, grid.width, grid.height, p.smooth, Math.max(maxCode, ...sp.codes)) : cls;
     const areas = classAreas(final, grid, Math.max(maxCode, ...sp.codes));
     const featRoles = [...st.bands.map((b) => ({ role: b.role, token: bandToken(n0(b.band.label)), label: b.band.label })), ...indexDefs().map((x) => ({ index: x.name }))];
-    pushResult({ kind: "classified", algo: p.algo, opts, names, featRoles, model, sp, accTest, accTrain, grid, cls: final, areas, codes: sp.codes, classes: S.classes.map((c) => ({ ...c })), splitBy: p.splitBy, seconds: (performance.now() - t0) / 1000, smooth: p.smooth, name: (p.outName.trim() || "Land Cover") + (S.win && imageSets().length > 1 ? ` (${activeSetName()})` : "") });
-    wlog(`${ALGO_NAMES[p.algo]} on ${activeSetName()}: ${d} inputs, ${nf(sp.train.cells.length)} training / ${nf(sp.test.cells.length)} test pixels, ${accTest ? `OA ${pct(accTest.oa)}%, kappa ${accTest.kappa.toFixed(3)}` : "no test pixels"}, ${fmtDur((performance.now() - t0) / 1000)}`);
+    pushResult({ kind: "classified", device, classifySec, algo: p.algo, opts, names, featRoles, model, sp, accTest, accTrain, grid, cls: final, areas, codes: sp.codes, classes: S.classes.map((c) => ({ ...c })), splitBy: p.splitBy, seconds: (performance.now() - t0) / 1000, smooth: p.smooth, name: (p.outName.trim() || "Land Cover") + (S.win && imageSets().length > 1 ? ` (${activeSetName()})` : "") });
+    wlog(`${ALGO_NAMES[p.algo]} on ${activeSetName()}: ${nf(grid.width)} × ${nf(grid.height)} px (${nf(n)} px), ${d} inputs = ${nf((n * d * 4) / 1048576, 1)} MB stack in memory, ${nf(sp.train.cells.length)} training / ${nf(sp.test.cells.length)} test pixels, ${accTest ? `OA ${pct(accTest.oa)}%, kappa ${accTest.kappa.toFixed(3)}` : "no test pixels"}, image classified on ${device} in ${fmtDur(classifySec)}, total ${fmtDur((performance.now() - t0) / 1000)}`);
     if (!S.win) await addResultLayer();
     S.tab = "results";
   } catch (e) {
@@ -1189,6 +1180,39 @@ async function runClassification() {
     progress(null);
     render();
   }
+}
+
+/**
+ * Predict every valid pixel. On the GPU (WebGPU) when that is switched on and available, else on the CPU; a GPU
+ * failure part-way falls back to the CPU for the rest. Returns class codes per cell and the device that did it.
+ */
+async function classifyPixels(model, layers, valid, n, codes, label) {
+  const d = layers.length, cls = new Uint8Array(n);
+  let gpu = null;
+  if (P().gpu) gpu = await gpuClassifier(model).catch((e) => { console.warn("[Image Classification] GPU", e); return null; });
+  const CH = gpu ? gpu.chunk : 32768, X = new Float32Array(CH * d), out = new Uint8Array(CH), idx = new Int32Array(CH);
+  let device = gpu ? "GPU (" + gpu.name + ")" : "CPU", last = performance.now();
+  for (let start = 0; start < n; start += CH) {
+    let m = 0;
+    for (let k = start; k < Math.min(n, start + CH); k++) {
+      if (!valid[k]) continue;
+      let ok = true;
+      for (let j = 0; j < d; j++) { const v = layers[j][k]; if (!Number.isFinite(v)) { ok = false; break; } X[m * d + j] = v; }
+      if (ok) idx[m++] = k;
+    }
+    if (m) {
+      let res = null;
+      if (gpu) {
+        try { res = await gpu.predict(X, m); }
+        catch (e) { console.warn("[Image Classification] GPU failed, finishing on the CPU", e); gpu.destroy(); gpu = null; device += " then CPU"; }
+      }
+      if (!res) res = predict(model, X, m, out);
+      for (let i = 0; i < m; i++) cls[idx[i]] = codes[res[i]];
+    }
+    if (performance.now() - last > 80) { progress(label, start / n); await tick(); last = performance.now(); }
+  }
+  gpu?.destroy();
+  return { cls, device };
 }
 
 function resultTiff(r) {
@@ -1752,6 +1776,7 @@ function tabModelSup() {
       <label class="icl-f"><span>Max pixels / sample</span><input type="number" data-p="maxPix" min="1" step="10" value="${p.maxPix}"></label>
       <label class="icl-f" style="flex:0 0 70px"><span>Seed</span><input type="number" data-p="seed" step="1" value="${p.seed}"></label>
     </div>
+    <label class="icl-check" title="Predicts the image's pixels on the graphics card through WebGPU; training stays on the CPU. Falls back to the CPU where WebGPU is missing."><input type="checkbox" data-p="gpu"${p.gpu ? " checked" : ""}><span>Use GPU (WebGPU) to classify the image${globalThis.navigator?.gpu ? "" : " · not available in this browser"}</span></label>
     <label class="icl-check" title="Weights each class by the inverse of its training pixel count, so a class with few samples is not outvoted by a large one"><input type="checkbox" data-p="balanced"${p.balanced ? " checked" : ""}><span>Balance classes (weight by inverse class size)</span></label>
   </section>
   <section class="icl-sec last">
@@ -1867,7 +1892,7 @@ function onClick(e) {
   const cb = e.target.closest("[data-cv],[data-cm],[data-cd],[data-cf],[data-ctx]");
   if (cb) {
     const d = cb.dataset, inFull = !!cb.closest(".icl-full");
-    if (d.cv) { S.view[d.card] = d.cv; if (S.textMode === d.card) S.textMode = null; redrawCard(d.card); }
+    if (d.cv) { S.cardView[d.card] = d.cv; if (S.textMode === d.card) S.textMode = null; redrawCard(d.card); }
     else if (d.cm) { const key = d.cm + (inFull ? ":full" : ""); S.menu = S.menu === key ? null : key; redrawCard(d.cm); }
     else if (d.cd) { S.menu = null; redrawCard(d.card); exportCard(d.card, d.cd)?.catch?.((err) => say("Download failed: " + (err?.message ?? err))); }
     else if (d.cf) { if (inFull) closeFull(); else openFull(d.cf); }
@@ -2042,7 +2067,9 @@ export const plugin = {
     closeWindow();
     S.root?.remove();
     closeFull();
-    Object.assign(S, { root: null, sources: [], stack: null, stackKey: "", reading: null, result: null, app: null });
+    // results, feature layers and canvases hold several copies of the image: let them go with the plugin
+    S.imgCache?.clear();
+    Object.assign(S, { root: null, sources: [], stack: null, stackKey: "", reading: null, result: null, results: [], fcache: null, chgCache: null, profile: null, baseKey: "", vp: null, app: null });
   },
 };
 

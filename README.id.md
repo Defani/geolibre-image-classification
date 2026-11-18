@@ -4,9 +4,9 @@
 
 Plugin [GeoLibre](https://geolibre.app) untuk klasifikasi tutupan lahan dari citra satelit, langsung di peramban atau GeoLibre Desktop. Isinya klasifikasi terbimbing (Random Forest, Gradient Tree Boost, SVM), klasifikasi tak terbimbing (K-means, ISODATA), uji akurasi (termasuk akurasi berbasis luas Olofsson dkk. 2014), dan analisis perubahan lahan antara dua tanggal. Semua dihitung di komputer sendiri; tidak ada data yang dikirim ke server.
 
-![Hasil klasifikasi Random Forest, citra Sentinel-2 sesudah kebakaran Gunung Lawu 2023](docs/img/readme/03-result-map.png)
+![Peta Random Forest mangrove, air, dan non-mangrove di Sembilang, Sumatera Selatan](docs/img/readme/03-result-map.png)
 
-*Citra contoh: Sentinel-2 sebelum dan sesudah kebakaran Gunung Lawu 2023, komposit Burn scar (B11 B8 B3). Ungu = area terbakar.*
+*Contoh: Sentinel-2 pesisir mangrove Sembilang (Sumatera Selatan), 2.506 × 2.507 px resolusi 10 m, 11 band + 7 indeks, 450 sampel titik, Random Forest 500 pohon. Hijau = mangrove, biru = air, krem = non-mangrove. Citra diklasifikasi di GPU dalam 9 detik.*
 
 ## Daftar isi
 
@@ -30,9 +30,10 @@ Plugin [GeoLibre](https://geolibre.app) untuk klasifikasi tutupan lahan dari cit
 | Tampilan | Komposit RGB (preset True colour, False colour, Burn scar, SWIR, Agriculture, atau bebas), band tunggal, indeks, ekspresi sendiri. Nama band bisa nomor (B11 B8 B3) atau nama (SWIR1 NIR Green) |
 | Sampel | Titik, poligon, lingkaran, persegi (tarik atau dua klik). Geser citra hanya dengan ikon tangan. Impor dari layer vektor, simpan sebagai layer |
 | Terbimbing | Random Forest, Gradient Tree Boost, SVM (RBF, linear, polinomial, sigmoid), opsi *Balance classes* |
+| GPU | Citra diklasifikasi di kartu grafis lewat WebGPU (RF, GTB, SVM), hasil labelnya sama dengan CPU; kembali ke CPU bila WebGPU tidak ada |
 | Tak terbimbing | K-means (inisialisasi k-means++), ISODATA (pecah, gabung, buang klaster), lalu labeli klaster menjadi kelas |
 | Akurasi | Confusion matrix, OA, kappa, PA, UA, F1, OOB (RF), akurasi berbasis luas dengan galat baku |
-| Grafik | Kartu putih (juga di mode gelap): confusion matrix gaya matplotlib, luas kelas, pentingnya variabel, spectral profile gaya jurnal, heatmap korelasi gaya seaborn |
+| Grafik | Kartu putih (juga di mode gelap): confusion matrix gaya matplotlib, luas kelas, pentingnya variabel, spectral profile gaya jurnal, nilai indeks per kelas (rata-rata ± SD), heatmap korelasi gaya seaborn |
 | Perubahan lahan | Terapkan model ke citra tanggal lain, lalu change matrix (ha), diagram Sankey, gains/losses |
 | Pasca-proses | Smoothing majority 3×3 / 5×5, konversi ke poligon (dissolve per kelas) |
 | Ekspor | Langsung ke folder di komputer: GeoTIFF berpalet, GeoJSON, XLSX, CSV, grafik PNG 300 dpi dan SVG |
@@ -51,7 +52,7 @@ Cara yang sama dengan *Choose .zip…*; plugin disimpan di peramban. Untuk penge
 
 ## Tutorial
 
-Contoh di bawah memakai citra Sentinel-2 Gunung Lawu 2023: tujuh band sebelum kebakaran (`PreFire_Band_B2 … B12`) dan enam band sesudahnya (`PostFire_Band_*`).
+Langkah 1–5 memakai citra Sentinel-2 pesisir mangrove Sembilang, Sumatera Selatan: sebelas band (`SembilangA_B1 … B12`, tanpa B2), komposit B8 B11 B3 (mangrove tampak oranye gelap, air biru, lahan lain pucat), tiga kelas (Mangrove, Water, Non-mangrove), dan 450 sampel titik. Potongan kedua, `SembilangB`, dipakai untuk menerapkan model ke citra lain. Contoh perubahan lahan dan K-means memakai Sentinel-2 sebelum dan sesudah kebakaran Gunung Lawu 2023 (`PreFire_Band_*`, `PostFire_Band_*`), karena analisis perubahan butuh dua tanggal di tempat yang sama.
 
 ### 1. Muat citra
 
@@ -80,7 +81,7 @@ Pilih alat gambar di toolbar atau di **Draw samples**:
 
 Saat alat gambar aktif, citra tidak ikut bergeser; pakai ikon tangan untuk menggeser dan roda tetikus untuk zoom. Spectral profile di bagian bawah dock diperbarui setiap kali sampel ditambah.
 
-![Menggambar sampel dengan Rectangle](docs/img/readme/02-samples.png)
+![Sampel titik di atas komposit B8 B11 B3, dengan daftar kelas dan alat gambar](docs/img/readme/02-samples.png)
 
 Tips sampel: gambar beberapa kotak kecil yang tersebar untuk setiap kelas, bukan satu kotak besar; ambil dari piksel yang jelas homogen.
 
@@ -98,6 +99,7 @@ Tips sampel: gambar beberapa kotak kecil yang tersebar untuk setiap kelas, bukan
 | Max pixels per sample | 500 | membatasi dominasi poligon besar |
 | Balance classes | mati | bobot kelas berbanding terbalik dengan frekuensinya |
 | Seed | 42 | hasil bisa diulang |
+| Use GPU | nyala | piksel citra diklasifikasi dengan WebGPU; training tetap di CPU |
 
 Klik **Run classification**. Hasilnya muncul di peta, di dock kiri **Results**, dan di **4 Results**: OA, kappa, luas per kelas, jumlah patch.
 
@@ -107,11 +109,13 @@ Tab **Accuracy**: OA, kappa, OOB, akurasi berbasis luas ±95 % CI, dan confusion
 
 ![Tab Accuracy](docs/img/readme/07-accuracy.png)
 
-Tab **Charts**: setiap kartu punya tombol Grafik/Tabel, unduh (CSV, XLSX, PNG 300 dpi, SVG), dan layar penuh.
+Tab **Charts**: setiap kartu punya tombol Grafik/Tabel, unduh (CSV, XLSX, PNG 300 dpi, SVG), dan layar penuh. **Index values per class** menampilkan rata-rata ± 1 SD tiap indeks yang dipilih pada piksel sampel tiap kelas, satu panel per indeks.
 
 ![Tab Charts](docs/img/readme/04-charts.png)
 
-![Spectral profile](docs/img/readme/05-spectral-profile.png)
+![Spectral profile per kelas](docs/img/readme/05-spectral-profile.png)
+
+![Nilai indeks per kelas, rata-rata ± 1 SD](docs/img/readme/05b-index-values.png)
 
 ![Heatmap korelasi input](docs/img/readme/06-correlation.png)
 
@@ -121,14 +125,14 @@ Di **4 Results → Smoothing** pilih Majority 3 × 3 atau 5 × 5 (luas dan grafi
 
 ### 6. Before/after dan perubahan lahan
 
-1. Di **4 Results → Classify another image**, pilih set lain (misalnya `PreFire_Band`) lalu **Classify**. Model yang sama diterapkan; band dicocokkan menurut perannya.
+1. Di **4 Results → Classify another image**, pilih set lain (misalnya `SembilangB`, atau `PreFire_Band` pada contoh kebakaran) lalu **Classify**. Model yang sama diterapkan; band dicocokkan menurut perannya.
 2. Tab **Split view** menampilkan dua citra atau hasil dengan swipe atau berdampingan.
 
-![Split view sebelum dan sesudah kebakaran](docs/img/readme/09-split-view.png)
+![Split view: citra SembilangB dan tutupan lahan hasil model SembilangA](docs/img/readme/09-split-view.png)
 
 3. Tab **Change**: pilih hasil awal (*From*) dan akhir (*To*); tombol ⇄ menukar keduanya. Isinya ringkasan luas tak berubah/berubah, change matrix, diagram Sankey, serta gains and losses per kelas.
 
-![Analisis perubahan lahan](docs/img/readme/08-change.png)
+![Analisis perubahan lahan (contoh Gunung Lawu)](docs/img/readme/08-change.png)
 
 ![Change matrix, Sankey, dan gains/losses](docs/img/readme/08b-change-gains.png)
 
@@ -138,7 +142,7 @@ Pada data contoh, sekitar 1.295 ha hutan sebelum kebakaran menjadi area terbakar
 
 **3 Model → Unsupervised**, pilih K-means atau ISODATA, atur jumlah klaster, lalu **Run clustering**. Di **Label clusters** setiap klaster diberi kelas (plugin menyarankan kelas terdekat dari profil sampel bila ada); hasil pelabelan menjadi peta tutupan lahan baru.
 
-![K-means 8 klaster dan pelabelan](docs/img/readme/10-kmeans.png)
+![K-means 8 klaster dan pelabelan (contoh Gunung Lawu)](docs/img/readme/10-kmeans.png)
 
 ### 8. Ekspor
 
@@ -166,6 +170,22 @@ Pada data contoh, sekitar 1.295 ha hutan sebelum kebakaran menjadi area terbakar
 | `F5` | jalankan klasifikasi / clustering |
 | `Ctrl+E` | ekspor ke folder |
 | `Esc` | batalkan gambar yang belum selesai, tutup dialog |
+
+### Kecepatan dan GPU
+
+Training hanya memakai piksel sampel dan tetap di CPU. Bagian yang lambat adalah memprediksi setiap piksel citra, dan tiap piksel berdiri sendiri, jadi dengan **Use GPU** menyala (3 Model) prediksi berjalan sebagai compute shader WebGPU: satu shader menelusuri pohon RF atau GTB, satu lagi menghitung SVM one-vs-one. Labelnya sama dengan hasil CPU. Tab **Log** mencatat ukuran grid, jumlah piksel, ukuran stack di memori, perangkat yang mengklasifikasi citra, dan lamanya.
+
+![Use GPU di tab Model; log menampilkan run yang sama di GPU dan di CPU](docs/img/readme/11-gpu-log.png)
+
+Diukur di web.geolibre.app pada laptop dengan grafis Intel Iris Xe:
+
+| Uji | GPU | CPU |
+|---|---|---|
+| 1.000.000 piksel × 18 input, RF 500 pohon | 1,1 s | 24,8 s |
+| Sentinel-2 Sembilang, 2.506 × 2.507 px (6,28 juta px), 11 band + 7 indeks (431 MB), RF 500 pohon: klasifikasi citra | 9,1 s | 3 mnt 43 s |
+| Model yang sama diterapkan ke citra kedua 2.115 × 2.115 px (seluruh langkah, termasuk membaca band) | 24 s | 47 s |
+
+WebGPU ada di Chrome dan Edge; GeoLibre Desktop di Windows berjalan di WebView2 yang juga mendukungnya (belum diuji dengan plugin ini). Bila tidak ada, atau panggilan GPU gagal di tengah jalan, plugin menyelesaikannya di CPU dan log mencatatnya.
 
 ## Metode dan rumus
 
@@ -357,6 +377,7 @@ Butuh Node.js. Jalankan `npm install` sekali untuk mengambil esbuild.
 npm install
 node build.mjs                      # plugin/ dan image-classification-<versi>.zip
 node test/apply.mjs                 # pencocokan band untuk citra lain, tebakan skala reflektansi
+node test/gpu-pack.mjs              # tata letak model untuk GPU memprediksi sama dengan modelnya (RF, GTB, 4 kernel SVM)
 node test/unsup.mjs                 # K-means, ISODATA, korelasi, change matrix
 node test/post.mjs                  # smoothing dan poligonisasi
 node test/weda.mjs <stack.json> <stack.u16> <folder sampel> <out.tif>   # inti pada stack Sentinel-2 nyata

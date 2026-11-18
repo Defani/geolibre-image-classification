@@ -6,7 +6,7 @@
   "description": "Image Classification plugin for GeoLibre",
   "scripts": {
     "build": "node build.mjs",
-    "test": "node test/unsup.mjs && node test/apply.mjs"
+    "test": "node test/unsup.mjs && node test/apply.mjs && node test/gpu-pack.mjs"
   },
   "devDependencies": {
     "esbuild": "0.24.2"
