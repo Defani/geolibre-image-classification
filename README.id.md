@@ -62,6 +62,7 @@ Di dock kanan **1 Layers**:
 - **Sensor**: pilih sensornya agar nomor band dipetakan dengan benar (Landsat 8 B5 = NIR, dst.).
 - **Indices**: klik indeks yang ingin dipakai sebagai input tambahan, atau tulis ekspresi sendiri, misalnya `(B8 - B12) / (B8 + B12)`.
 - **Grid**: layer acuan dan ukuran sel. Band beresolusi lain di-resample (nearest) ke grid ini.
+- **Reflectance scale**: Auto memilih 0–1, × 0.0001 (DN Sentinel-2) atau Landsat Collection 2 Level-2 (× 0.0000275 − 0.2) dan menampilkan pilihannya; atur manual bila tebakannya salah. Indeks dan profil spektral memakai nilai yang sudah diskalakan.
 - **RGB composite**: pilih preset. Untuk area terbakar pakai **Burn scar (B11 B8 B3)**.
 
 ### 2. Buat kelas dan sampel
@@ -350,10 +351,12 @@ Ekspresi sendiri boleh memakai `B2 … B12`, `B8A`, angka, `+ - * /`, dan kurung
 
 ## Build dan pengujian
 
-Butuh Node.js dan checkout [GeoLibre](https://github.com/Defani/GeoLibre) (esbuild dipinjam dari sana; atur `GEOLIBRE_REPO` bila lokasinya lain).
+Butuh Node.js. Jalankan `npm install` sekali untuk mengambil esbuild.
 
 ```bash
+npm install
 node build.mjs                      # plugin/ dan image-classification-<versi>.zip
+node test/apply.mjs                 # pencocokan band untuk citra lain, tebakan skala reflektansi
 node test/unsup.mjs                 # K-means, ISODATA, korelasi, change matrix
 node test/post.mjs                  # smoothing dan poligonisasi
 node test/weda.mjs <stack.json> <stack.u16> <folder sampel> <out.tif>   # inti pada stack Sentinel-2 nyata

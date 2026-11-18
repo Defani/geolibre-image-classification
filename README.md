@@ -62,6 +62,7 @@ In the right dock, **1 Layers**:
 - **Sensor**: pick the sensor so band numbers map correctly (Landsat 8 B5 = NIR, and so on).
 - **Indices**: click the indices to use as extra inputs, or write your own expression, for example `(B8 - B12) / (B8 + B12)`.
 - **Grid**: reference layer and cell size. Bands at other resolutions are resampled (nearest) onto this grid.
+- **Reflectance scale**: Auto picks 0–1, × 0.0001 (Sentinel-2 DN) or Landsat Collection 2 Level-2 (× 0.0000275 − 0.2) and shows its choice; set it by hand if the guess is wrong. Indices and spectral profiles use the scaled values.
 - **RGB composite**: pick a preset. For burned areas use **Burn scar (B11 B8 B3)**.
 
 ### 2. Create classes and samples
@@ -350,10 +351,12 @@ Your own expressions may use `B2 … B12`, `B8A`, numbers, `+ - * /` and parenth
 
 ## Build and tests
 
-Needs Node.js and a checkout of [GeoLibre](https://github.com/Defani/GeoLibre) (esbuild is borrowed from it; set `GEOLIBRE_REPO` if it lives elsewhere).
+Needs Node.js. `npm install` once fetches esbuild.
 
 ```bash
+npm install
 node build.mjs                      # plugin/ and image-classification-<version>.zip
+node test/apply.mjs                 # band matching for another image, reflectance scale guess
 node test/unsup.mjs                 # K-means, ISODATA, correlation, change matrix
 node test/post.mjs                  # smoothing and polygonisation
 node test/weda.mjs <stack.json> <stack.u16> <samples dir> <out.tif>   # core on a real Sentinel-2 stack
