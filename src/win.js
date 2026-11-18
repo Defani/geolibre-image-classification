@@ -330,8 +330,10 @@ function bindViewer(el) {
     S.vp = { k: S.vp.k * f, x: mx - (mx - S.vp.x) * f, y: my - (my - S.vp.y) * f };
     drawViewer();
   }, { passive: false, signal });
+  // the zoom buttons sit on top of the image: a click on them is never a pan or a sample
+  const onControl = (e) => !!e.target.closest?.("button, .icw-zoom");
   el.addEventListener("mousedown", (e) => {
-    if (e.button !== 0 || !S.vp) return;
+    if (e.button !== 0 || !S.vp || onControl(e)) return;
     if (S.view === "split" && S.split.mode === "swipe" && Math.abs(e.clientX - cv.getBoundingClientRect().left - (cv.clientWidth * S.split.pos) / 100) < 12) { drag = { split: true }; return; }
     const g = viewGrid();
     if (S.tool === "pan" || S.view === "split" || !g) { drag = { pan: true, x: e.clientX, y: e.clientY, vx: S.vp.x, vy: S.vp.y }; el.classList.add("grabbing"); return; }
@@ -364,6 +366,7 @@ function bindViewer(el) {
     }
   }, { signal });
   el.addEventListener("click", (e) => {
+    if (onControl(e)) return;
     if (S.skipClick) { S.skipClick = false; return; }
     if (S.tool === "pan" || S.view === "split" || !S.vp || (S.tool === "polygon" && e.detail > 1)) return;
     const g = viewGrid();
@@ -375,7 +378,7 @@ function bindViewer(el) {
     S.draft.push(p);
     drawViewer();
   }, { signal });
-  el.addEventListener("dblclick", (e) => { if (S.tool === "polygon" && S.draft.length >= 3) { e.preventDefault(); finishPolygon(); } }, { signal });
+  el.addEventListener("dblclick", (e) => { if (!onControl(e) && S.tool === "polygon" && S.draft.length >= 3) { e.preventDefault(); finishPolygon(); } }, { signal });
   el.addEventListener("mouseleave", () => { S.cursorInfo = null; winStatus(); }, { signal });
 }
 function finishShape(p) {

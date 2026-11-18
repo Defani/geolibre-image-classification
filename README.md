@@ -4,9 +4,9 @@
 
 A [GeoLibre](https://geolibre.app) plugin for land cover classification of satellite imagery, in the browser or in GeoLibre Desktop. It covers supervised classification (Random Forest, Gradient Tree Boost, SVM), unsupervised classification (K-means, ISODATA), accuracy assessment (including the area-based estimator of Olofsson et al. 2014), and land cover change between two dates. Everything runs on your own computer; no data is sent to a server.
 
-![Random Forest result on a Sentinel-2 image after the 2023 Mount Lawu fire](docs/img/readme/03-result-map.png)
+![Random Forest map of mangrove, water and non-mangrove in Sembilang, South Sumatra](docs/img/readme/03-result-map.png)
 
-*Example data: Sentinel-2 before and after the 2023 fire on Mount Lawu (Java, Indonesia), Burn scar composite (B11 B8 B3). Purple = burned.*
+*Example: Sentinel-2 of the Sembilang mangrove coast (South Sumatra, Indonesia), 2,506 × 2,507 px at 10 m, 11 bands + 7 indices, 450 point samples, Random Forest 500 trees. Green = mangrove, blue = water, sand = non-mangrove. The image was classified on the GPU in 9 s.*
 
 ## Contents
 
@@ -52,7 +52,7 @@ Same steps with *Choose .zip…*; the plugin is stored in the browser. For devel
 
 ## Tutorial
 
-The examples use Sentinel-2 imagery of Mount Lawu, 2023: seven bands before the fire (`PreFire_Band_B2 … B12`) and six after it (`PostFire_Band_*`).
+Steps 1–5 use Sentinel-2 imagery of the Sembilang mangrove coast in South Sumatra: eleven bands (`SembilangA_B1 … B12`, no B2), a B8 B11 B3 composite (mangrove shows dark orange, water blue, other land pale), three classes (Mangrove, Water, Non-mangrove) and 450 point samples. A second crop, `SembilangB`, is used to apply the model to another image. The land cover change and K-means examples use Sentinel-2 before and after the 2023 fire on Mount Lawu (`PreFire_Band_*`, `PostFire_Band_*`), since change needs two dates of one place.
 
 ### 1. Load the imagery
 
@@ -81,7 +81,7 @@ Pick a drawing tool on the toolbar or under **Draw samples**:
 
 While a drawing tool is on, the image does not move; use the hand tool to pan and the mouse wheel to zoom. The spectral profile at the bottom of the dock updates with every new sample.
 
-![Drawing samples with the Rectangle tool](docs/img/readme/02-samples.png)
+![Point samples on the B8 B11 B3 composite, with the class list and drawing tools](docs/img/readme/02-samples.png)
 
 Tip: draw several small, spread-out boxes per class rather than one large box, over clearly homogeneous pixels.
 
@@ -113,7 +113,9 @@ Press **Run classification**. The result appears on the map, in the left dock un
 
 ![Charts tab](docs/img/readme/04-charts.png)
 
-![Spectral profile](docs/img/readme/05-spectral-profile.png)
+![Spectral profile per class](docs/img/readme/05-spectral-profile.png)
+
+![Index values per class, mean ± 1 SD](docs/img/readme/05b-index-values.png)
 
 ![Input correlation heatmap](docs/img/readme/06-correlation.png)
 
@@ -123,14 +125,14 @@ In **4 Results → Smoothing** choose Majority 3 × 3 or 5 × 5 (areas and chart
 
 ### 6. Before/after and land cover change
 
-1. In **4 Results → Classify another image**, pick another set (for example `PreFire_Band`) and press **Classify**. The same model is applied; bands are matched by role.
+1. In **4 Results → Classify another image**, pick another set (for example `SembilangB`, or `PreFire_Band` in the fire example) and press **Classify**. The same model is applied; bands are matched by role.
 2. The **Split view** tab shows two images or results with a swipe or side by side.
 
-![Split view before and after the fire](docs/img/readme/09-split-view.png)
+![Split view: the SembilangB image and the land cover the SembilangA model gives it](docs/img/readme/09-split-view.png)
 
 3. **Change** tab: choose the earlier result (*From*) and the later one (*To*); the ⇄ button swaps them. It shows unchanged/changed area, the change matrix, a Sankey diagram, and gains and losses per class.
 
-![Land cover change](docs/img/readme/08-change.png)
+![Land cover change (Mount Lawu example)](docs/img/readme/08-change.png)
 
 ![Change matrix, Sankey, gains and losses](docs/img/readme/08b-change-gains.png)
 
@@ -140,7 +142,7 @@ In the example, about 1,295 ha of pre-fire forest became burned area; burned are
 
 **3 Model → Unsupervised**, choose K-means or ISODATA, set the number of clusters, then **Run clustering**. Under **Label clusters** give each cluster a class (the plugin suggests the nearest class from the sample profiles when there are samples); the labelled clusters become a new land cover map.
 
-![K-means with 8 clusters and labelling](docs/img/readme/10-kmeans.png)
+![K-means with 8 clusters and labelling (Mount Lawu example)](docs/img/readme/10-kmeans.png)
 
 ### 8. Export
 
@@ -172,6 +174,8 @@ In the example, about 1,295 ha of pre-fire forest became burned area; burned are
 ### Speed and the GPU
 
 Training uses only the sample pixels and stays on the CPU. Predicting every pixel of the image is the slow part, and each pixel is independent, so with **Use GPU** on (3 Model) it runs as a WebGPU compute shader: one shader walks the RF or GTB trees, another evaluates the one-vs-one SVM. The labels are the same as on the CPU. The **Log** tab records the grid size, pixel count, in-memory stack size, which device classified the image and how long it took.
+
+![Use GPU in the Model tab; the log shows the same run on the GPU and on the CPU](docs/img/readme/11-gpu-log.png)
 
 Measured in web.geolibre.app on a laptop with Intel Iris Xe graphics:
 
